@@ -37,3 +37,6 @@ lerna-debug.log*
 .env
 .env.test
 .env.production
+
+# Visual Studio 2022 cache and settings
+.vs/
