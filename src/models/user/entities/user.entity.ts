@@ -1,4 +1,9 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 
 @Entity('users')
 export class User {
@@ -26,7 +31,13 @@ export class User {
   @Column({ length: 20, default: 'ACTIVE' })
   status: string;
 
-  @Column({ type: 'decimal', precision: 15, scale: 2, name: 'total_spending', default: 0 })
+  @Column({
+    type: 'decimal',
+    precision: 15,
+    scale: 2,
+    name: 'total_spending',
+    default: 0,
+  })
   totalSpending: number;
 
   @Column({ type: 'timestamp', name: 'vip_updated_at', nullable: true })

@@ -9,7 +9,7 @@ import { UserModule } from './models/user/user.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
-      isGlobal: true,
+      isGlobal: true, // ✅ Đảm bảo ConfigModule là global
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -31,7 +31,7 @@ import { UserModule } from './models/user/user.module';
           password: configService.get<string>('password_DB'),
           database: configService.get<string>('name_DB'),
           autoLoadEntities: true,
-          synchronize: false, // set to true for auto DB creation during dev
+          synchronize: false,
         };
       },
     }),
@@ -43,6 +43,8 @@ import { UserModule } from './models/user/user.module';
 })
 export class AppModule {
   constructor() {
-    console.log('✅ Connection to the Database has been successfully established.');
+    console.log(
+      '✅ Connection to the Database has been successfully established.',
+    );
   }
 }
