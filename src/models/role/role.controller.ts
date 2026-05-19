@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { RoleService } from './role.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
+import { RemoveRoleDto } from './dto/remove-role.dto';
 
 @ApiTags('Role')
 @Controller('role')
@@ -31,7 +32,7 @@ export class RoleController {
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.roleService.remove(id);
+  remove(@Param('id') id: string, @Query() removeRoleDto: RemoveRoleDto) {
+    return this.roleService.remove(id, removeRoleDto.status);
   }
 }
