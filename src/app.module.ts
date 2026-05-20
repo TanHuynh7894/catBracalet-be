@@ -5,6 +5,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { CategoriesModule } from './models/categories/categories.module';
 import { MaterialsModule } from './models/materials/materials.module';
+import { ProductsModule } from './models/products/products.module';
 import { RoleModule } from './models/role/role.module';
 import { UserModule } from './models/user/user.module';
 
@@ -39,6 +40,7 @@ import { UserModule } from './models/user/user.module';
     }),
     CategoriesModule,
     MaterialsModule,
+    ProductsModule,
     RoleModule,
     UserModule,
   ],
