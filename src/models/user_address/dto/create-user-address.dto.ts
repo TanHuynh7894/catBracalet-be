@@ -19,6 +19,9 @@ export class CreateUserAddressDto {
   @ApiProperty({ example: '123 Nguyen Hue', description: 'The detailed street address' })
   detailAddress: string;
 
+  @ApiProperty({ example: false, description: 'Is this the default address?', required: false, default: false })
+  isDefault?: boolean;
+
   @ApiProperty({ example: 'ACTIVE', description: 'Status of the address (ACTIVE or INACTIVE)', required: false, default: 'ACTIVE' })
   status?: string;
 }

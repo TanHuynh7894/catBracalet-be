@@ -27,6 +27,9 @@ export class UserAddress {
   @Column({ length: 500, name: 'detail_address' })
   detailAddress: string;
 
+  @Column({ name: 'is_default', default: false })
+  isDefault: boolean;
+
   @Column({ length: 20, default: 'ACTIVE' })
   status: string;
 

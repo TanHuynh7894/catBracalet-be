@@ -7,7 +7,7 @@ import { UpdateUserAddressDto } from './dto/update-user-address.dto';
 @ApiTags('User Address')
 @Controller('user-address')
 export class UserAddressController {
-  constructor(private readonly userAddressService: UserAddressService) {}
+  constructor(private readonly userAddressService: UserAddressService) { }
 
   @Post(':userId')
   @ApiOperation({ summary: 'Create a new address for a user' })
@@ -35,11 +35,20 @@ export class UserAddressController {
   }
 
   @Delete(':userId/:addressId')
-  @ApiOperation({ summary: 'Delete an address of a user' })
+  @ApiOperation({ summary: 'Delete (deactivate) an address of a user' })
   deleteAddressForUser(
     @Param('userId') userId: string,
     @Param('addressId') addressId: string,
   ) {
     return this.userAddressService.deleteAddressForUser(userId, addressId);
+  }
+
+  @Patch(':userId/:addressId/default')
+  @ApiOperation({ summary: 'Set an address as default for a user' })
+  setDefaultAddressForUser(
+    @Param('userId') userId: string,
+    @Param('addressId') addressId: string,
+  ) {
+    return this.userAddressService.setDefaultAddressForUser(userId, addressId);
   }
 }
