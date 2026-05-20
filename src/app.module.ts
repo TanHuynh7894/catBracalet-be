@@ -5,8 +5,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { RoleModule } from './models/role/role.module';
 import { UserModule } from './models/user/user.module';
-import { CartModule } from './models/carts/cart.module';
-import { CartItemsModule } from './models/cart_items/cart-items.module';
+import { CartModule } from './models/cart/cart.module';
 
 @Module({
   imports: [
@@ -40,7 +39,6 @@ import { CartItemsModule } from './models/cart_items/cart-items.module';
     RoleModule,
     UserModule,
     CartModule,
-    CartItemsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
