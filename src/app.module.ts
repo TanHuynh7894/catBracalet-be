@@ -5,11 +5,12 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { RoleModule } from './models/role/role.module';
 import { UserModule } from './models/user/user.module';
+import { UserAddressModule } from './models/user_address/user_address.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
-      isGlobal: true,
+      isGlobal: true, // ✅ Đảm bảo ConfigModule là global
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -31,18 +32,21 @@ import { UserModule } from './models/user/user.module';
           password: configService.get<string>('password_DB'),
           database: configService.get<string>('name_DB'),
           autoLoadEntities: true,
-          synchronize: false, // set to true for auto DB creation during dev
+          synchronize: false,
         };
       },
     }),
     RoleModule,
     UserModule,
+    UserAddressModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule {
   constructor() {
-    console.log('✅ Connection to the Database has been successfully established.');
+    console.log(
+      '✅ Connection to the Database has been successfully established.',
+    );
   }
 }
