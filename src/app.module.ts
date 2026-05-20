@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { CategoriesModule } from './models/categories/categories.module';
 import { MaterialsModule } from './models/materials/materials.module';
 import { ProductImagesModule } from './models/product-images/product-images.module';
+import { ProductVariantsModule } from './models/product-variants/product-variants.module';
 import { ProductsModule } from './models/products/products.module';
 import { RoleModule } from './models/role/role.module';
 import { UserModule } from './models/user/user.module';
@@ -42,6 +43,7 @@ import { UserModule } from './models/user/user.module';
     CategoriesModule,
     MaterialsModule,
     ProductImagesModule,
+    ProductVariantsModule,
     ProductsModule,
     RoleModule,
     UserModule,

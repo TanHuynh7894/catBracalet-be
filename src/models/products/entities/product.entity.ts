@@ -1,4 +1,15 @@
-import { Check, Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Check,
+  Column,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { Category } from '../../categories/entities/category.entity';
+import { Material } from '../../materials/entities/material.entity';
+import { ProductImage } from '../../product-images/entities/product-image.entity';
 
 @Entity('products')
 @Check(`status IN ('ACTIVE', 'INACTIVE')`)
@@ -11,6 +22,17 @@ export class Product {
 
   @Column({ type: 'uuid', name: 'material_id', nullable: true })
   materialId?: string;
+
+  @ManyToOne(() => Category, { nullable: true })
+  @JoinColumn({ name: 'category_id', referencedColumnName: 'id' })
+  category?: Category;
+
+  @ManyToOne(() => Material, { nullable: true })
+  @JoinColumn({ name: 'material_id', referencedColumnName: 'id' })
+  material?: Material;
+
+  @OneToMany(() => ProductImage, (productImage) => productImage.product)
+  productImages?: ProductImage[];
 
   @Column({ length: 255, name: 'product_name' })
   productName: string;
