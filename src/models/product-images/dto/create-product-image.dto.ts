@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsUUID } from 'class-validator';
+import { UploadImageType } from '../../../helpers/upload-image.helper';
 
 export enum ProductImageStatus {
   ACTIVE = 'ACTIVE',
@@ -16,11 +17,11 @@ export class CreateProductImageDto {
   productId: string;
 
   @ApiProperty({
-    description: 'The URL of the product image',
-    example: 'https://example.com/images/product-1.jpg',
+    description: 'Upload type: P for product, A for avatar',
+    enum: UploadImageType,
+    example: UploadImageType.PRODUCT,
   })
-  @IsString()
+  @IsEnum(UploadImageType)
   @IsNotEmpty()
-  @MaxLength(500)
-  imageUrl: string;
+  type: UploadImageType;
 }

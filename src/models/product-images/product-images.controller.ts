@@ -6,14 +6,20 @@ import {
   Param,
   Patch,
   Post,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
+  ApiBody,
   ApiCreatedResponse,
+  ApiConsumes,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
+import { getImageUploadOptions } from '../../helpers/upload-image.helper';
 
 import { CreateProductImageDto } from './dto/create-product-image.dto';
 import { UpdateProductImageDto } from './dto/update-product-image.dto';
@@ -29,9 +35,25 @@ export class ProductImagesController {
 
   @Post()
   @ApiOperation({ summary: 'Create a product image' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        productId: { type: 'string', format: 'uuid' },
+        type: { type: 'string', enum: ['P', 'A'] },
+        file: { type: 'string', format: 'binary' },
+      },
+      required: ['productId', 'type', 'file'],
+    },
+  })
+  @UseInterceptors(FileInterceptor('file', getImageUploadOptions()))
   @ApiCreatedResponse({ type: ProductImage })
-  create(@Body() createProductImageDto: CreateProductImageDto) {
-    return this.productImagesService.create(createProductImageDto);
+  create(
+    @Body() createProductImageDto: CreateProductImageDto,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.productImagesService.create(createProductImageDto, file);
   }
 
   @Get()

@@ -3,8 +3,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { buildImagePublicUrl } from '../../helpers/upload-image.helper';
 
 import {
   CreateProductImageDto,
@@ -16,26 +18,48 @@ import { ProductImage } from './entities/product-image.entity';
 @Injectable()
 export class ProductImagesService {
   constructor(
+    private readonly configService: ConfigService,
     @InjectRepository(ProductImage)
     private readonly productImageRepository: Repository<ProductImage>,
   ) {}
 
   async create(
     createProductImageDto: CreateProductImageDto,
+    file: Express.Multer.File,
   ): Promise<ProductImage> {
+    if (!file) {
+      throw new BadRequestException('Image file is required.');
+    }
+
+    const imageUrl = buildImagePublicUrl(file.path);
+
     const newProductImage = this.productImageRepository.create({
-      ...createProductImageDto,
+      productId: createProductImageDto.productId,
+      imageUrl,
       status: ProductImageStatus.ACTIVE,
     });
 
-    return await this.productImageRepository.save(newProductImage);
+    const savedProductImage =
+      await this.productImageRepository.save(newProductImage);
+
+    return this.toPublicImageUrl(savedProductImage);
   }
 
   async findAll(): Promise<ProductImage[]> {
-    return await this.productImageRepository.find();
+    const productImages = await this.productImageRepository.find();
+
+    return productImages.map((productImage) =>
+      this.toPublicImageUrl(productImage),
+    );
   }
 
   async findOne(id: string): Promise<ProductImage> {
+    const productImage = await this.findOneEntity(id);
+
+    return this.toPublicImageUrl(productImage);
+  }
+
+  private async findOneEntity(id: string): Promise<ProductImage> {
     const productImage = await this.productImageRepository.findOneBy({ id });
 
     if (!productImage) {
@@ -47,11 +71,27 @@ export class ProductImagesService {
     return productImage;
   }
 
+  private toPublicImageUrl(productImage: ProductImage): ProductImage {
+    const baseUrl = (this.configService.get<string>('url_base_BE') || '').replace(
+      /\/$/,
+      '',
+    );
+
+    if (!baseUrl || /^https?:\/\//i.test(productImage.imageUrl)) {
+      return productImage;
+    }
+
+    return {
+      ...productImage,
+      imageUrl: `${baseUrl}${productImage.imageUrl}`,
+    };
+  }
+
   async update(
     id: string,
     updateProductImageDto: UpdateProductImageDto,
   ): Promise<ProductImage> {
-    const productImage = await this.findOne(id);
+    const productImage = await this.findOneEntity(id);
 
     if ('status' in updateProductImageDto) {
       throw new BadRequestException(
@@ -61,19 +101,25 @@ export class ProductImagesService {
 
     this.productImageRepository.merge(productImage, updateProductImageDto);
 
-    return await this.productImageRepository.save(productImage);
+    const updatedProductImage =
+      await this.productImageRepository.save(productImage);
+
+    return this.toPublicImageUrl(updatedProductImage);
   }
 
   async softDelete(id: string): Promise<ProductImage> {
-    const productImage = await this.findOne(id);
+    const productImage = await this.findOneEntity(id);
 
     productImage.status = ProductImageStatus.INACTIVE;
 
-    return await this.productImageRepository.save(productImage);
+    const updatedProductImage =
+      await this.productImageRepository.save(productImage);
+
+    return this.toPublicImageUrl(updatedProductImage);
   }
 
   async remove(id: string): Promise<void> {
-    const productImage = await this.findOne(id);
+    const productImage = await this.findOneEntity(id);
 
     await this.productImageRepository.remove(productImage);
   }
