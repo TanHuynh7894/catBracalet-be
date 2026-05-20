@@ -1,9 +1,11 @@
-﻿import {
+import {
   Injectable,
   BadRequestException,
   UnauthorizedException,
   NotFoundException,
 } from '@nestjs/common';
+
+
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -17,6 +19,7 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { User } from './entities/user.entity';
+
 import { OtpService } from './services/otp.service';
 import { JwtTokenService } from './services/jwt-token.service';
 
@@ -32,14 +35,20 @@ interface JwtPayload {
   email: string;
 }
 
+import { Role } from '../role/entities/role.entity';
+
+
 @Injectable()
 export class UserService {
   constructor(
     @InjectRepository(User)
-    private userRepository: Repository<User>,
+    private readonly userRepository: Repository<User>,
     private otpService: OtpService,
     private jwtTokenService: JwtTokenService,
-  ) {}
+
+    @InjectRepository(Role)
+    private readonly roleRepository: Repository<Role>,
+  ) { }
 
   /**
    * Bước 1: Đăng ký người dùng - lưu tạm thời, gửi OTP
@@ -119,7 +128,10 @@ export class UserService {
   }> {
     const { email, password } = loginUserDto;
 
-    const user = await this.userRepository.findOne({ where: { email } });
+    const user = await this.userRepository.findOne({
+      where: { email },
+      relations: ['roles'],
+    });
     if (!user) {
       throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
     }
@@ -163,6 +175,7 @@ export class UserService {
       totalSpending: user.totalSpending,
       vipUpdatedAt: user.vipUpdatedAt,
       createdAt: user.createdAt,
+      roles: user.roles,
     };
 
     return {
@@ -324,18 +337,52 @@ export class UserService {
   }
 
   findAll() {
-    return this.userRepository.find();
+    return this.userRepository.find({
+      relations: ['roles'],
+    });
   }
 
-  findOne(id: string) {
-    return this.userRepository.findOneBy({ id });
+  async findOne(id: string) {
+    const user = await this.userRepository.findOne({
+      where: { id },
+      relations: ['roles'],
+    });
+    if (!user) {
+      throw new NotFoundException(`User with id ${id} not found`);
+    }
+    return user;
   }
 
   update(id: string, updateUserDto: UpdateUserDto) {
     return this.userRepository.update(id, updateUserDto);
   }
 
+
+  async addRoleToUser(userId: string, roleId: string): Promise<User> {
+    const user = await this.findOne(userId);
+    const role = await this.roleRepository.findOneBy({ id: roleId, status: 'ACTIVE' });
+    if (!role) {
+      throw new NotFoundException(`Active Role with id ${roleId} not found`);
+    }
+
+    const hasRole = user.roles.some((r) => r.id === roleId);
+    if (!hasRole) {
+      user.roles.push(role);
+      await this.userRepository.save(user);
+    }
+    return user;
+  }
+
+  async removeRoleFromUser(userId: string, roleId: string): Promise<User> {
+    const user = await this.findOne(userId);
+
+    user.roles = user.roles.filter((r) => r.id !== roleId);
+    await this.userRepository.save(user);
+    return user;
+  }
+
   remove(id: string) {
     return this.userRepository.delete(id);
   }
 }
+

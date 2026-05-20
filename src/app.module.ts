@@ -5,6 +5,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { RoleModule } from './models/role/role.module';
 import { UserModule } from './models/user/user.module';
+import { UserAddressModule } from './models/user_address/user_address.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { UserModule } from './models/user/user.module';
     }),
     RoleModule,
     UserModule,
+    UserAddressModule,
   ],
   controllers: [AppController],
   providers: [AppService],

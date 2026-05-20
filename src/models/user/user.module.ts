@@ -7,30 +7,16 @@ import { UserController } from './user.controller';
 import { User } from './entities/user.entity';
 import { OtpService } from './services/otp.service';
 import { JwtTokenService } from './services/jwt-token.service';
+import { Role } from '../role/entities/role.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User]),
-    JwtModule.registerAsync({
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => {
-        const jwtSecret = configService.get<string>('JWT_SECRET');
-
-        if (!jwtSecret) {
-          throw new Error('JWT_SECRET is not defined in .env');
-        }
-
-        return {
-          secret: jwtSecret,
-          signOptions: {
-            expiresIn: '15m',
-          },
-        };
-      },
-    }),
+    TypeOrmModule.forFeature([User, Role]),
+    JwtModule.register({}),
   ],
   controllers: [UserController],
   providers: [UserService, OtpService, JwtTokenService],
   exports: [JwtModule, JwtTokenService],
 })
-export class UserModule {}
+export class UserModule { }
+
