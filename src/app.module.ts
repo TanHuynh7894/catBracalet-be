@@ -7,6 +7,7 @@ import { RoleModule } from './models/role/role.module';
 import { UserModule } from './models/user/user.module';
 import { UserAddressModule } from './models/user_address/user_address.module';
 import { VouchersModule } from './models/vouchers/vouchers.module';
+import { PaymentsModule } from './models/payments/payments.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { VouchersModule } from './models/vouchers/vouchers.module';
     UserModule,
     UserAddressModule,
     VouchersModule,
+    PaymentsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
