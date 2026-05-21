@@ -1,6 +1,7 @@
 
-import { Column, CreateDateColumn, Entity, ManyToMany, JoinTable, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, ManyToMany, JoinTable, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { Role } from '../../role/entities/role.entity';
+import { VipLevel } from '../../VIP/entities/vip-level.entity';
 
 @Entity('users')
 export class User {
@@ -9,6 +10,10 @@ export class User {
 
   @Column({ type: 'uuid', name: 'vip_level_id', nullable: true })
   vipLevelId: string;
+
+  @ManyToOne(() => VipLevel, (vipLevel) => vipLevel.users)
+  @JoinColumn({ name: 'vip_level_id' })
+  vipLevel: VipLevel;
 
   @Column({ length: 255, name: 'full_name' })
   fullName: string;

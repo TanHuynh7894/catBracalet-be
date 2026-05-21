@@ -8,6 +8,7 @@ import { UserModule } from './models/user/user.module';
 import { UserAddressModule } from './models/user_address/user_address.module';
 import { VouchersModule } from './models/vouchers/vouchers.module';
 import { PaymentsModule } from './models/payments/payments.module';
+import { VipModule } from './models/VIP/vip.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { PaymentsModule } from './models/payments/payments.module';
     UserAddressModule,
     VouchersModule,
     PaymentsModule,
+    VipModule,
   ],
   controllers: [AppController],
   providers: [AppService],
