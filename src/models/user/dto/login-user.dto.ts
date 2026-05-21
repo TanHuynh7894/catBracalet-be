@@ -3,10 +3,10 @@
 export class LoginUserDto {
   @ApiProperty({
     example: 'john@example.com',
-    description: 'Email đã kích hoạt',
+    description: 'Activated email address',
   })
   email: string;
 
-  @ApiProperty({ example: 'password123', description: 'Mật khẩu' })
+  @ApiProperty({ example: 'password123', description: 'User password' })
   password: string;
 }

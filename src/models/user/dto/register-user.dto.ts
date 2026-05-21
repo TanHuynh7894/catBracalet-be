@@ -3,25 +3,25 @@
 export class RegisterUserDto {
   @ApiProperty({
     example: 'john@example.com',
-    description: 'Email của người dùng',
+    description: 'Email address of the user',
   })
   email: string;
 
   @ApiProperty({
     example: 'John Doe',
-    description: 'Tên đầy đủ của người dùng',
+    description: 'Full name of the user',
   })
   fullName: string;
 
   @ApiProperty({
     example: 'password123',
-    description: 'Mật khẩu (tối thiểu 6 ký tự)',
+    description: 'User password (minimum 6 characters)',
   })
   password: string;
 
   @ApiProperty({
     example: '0912345678',
-    description: 'Số điện thoại (tùy chọn)',
+    description: 'Phone number (optional)',
     required: false,
   })
   phone?: string;
