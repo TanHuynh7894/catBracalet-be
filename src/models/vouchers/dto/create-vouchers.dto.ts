@@ -7,7 +7,7 @@ export class CreateVouchersDto {
   @ApiProperty({ example: 15.5, description: 'The discount value' })
   discountValue: number;
 
-  @ApiProperty({ example: 'PERCENTAGE', description: 'The type of discount (e.g., PERCENTAGE, FIXED_AMOUNT)' })
+  @ApiProperty({ example: 'PERCENT', description: 'The type of discount (e.g., PERCENT, FIXED)' })
   discountType: string;
 
   @ApiProperty({ example: 100, description: 'The quantity of vouchers available' })

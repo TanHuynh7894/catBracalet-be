@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { RoleModule } from './models/role/role.module';
 import { UserModule } from './models/user/user.module';
 import { UserAddressModule } from './models/user_address/user_address.module';
+import { VouchersModule } from './models/vouchers/vouchers.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { UserAddressModule } from './models/user_address/user_address.module';
     RoleModule,
     UserModule,
     UserAddressModule,
+    VouchersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

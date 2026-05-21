@@ -10,7 +10,7 @@ export class VouchersService {
   constructor(
     @InjectRepository(Vouchers)
     private readonly vouchersRepository: Repository<Vouchers>,
-  ) {}
+  ) { }
 
   create(createVouchersDto: CreateVouchersDto) {
     const newVoucher = this.vouchersRepository.create(createVouchersDto);
@@ -35,7 +35,9 @@ export class VouchersService {
     return this.vouchersRepository.update(id, updateVouchersDto);
   }
 
-  remove(id: string) {
-    return this.vouchersRepository.delete(id);
+  async remove(id: string) {
+    const voucher = await this.findOne(id);
+    voucher.status = 'INACTIVE';
+    return this.vouchersRepository.save(voucher);
   }
 }
