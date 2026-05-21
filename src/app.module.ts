@@ -12,14 +12,11 @@ import { ProductsModule } from './models/products/products.module';
 import { ReviewsModule } from './models/reviews/reviews.module';
 import { RoleModule } from './models/role/role.module';
 import { UserModule } from './models/user/user.module';
-<<<<<<< HEAD
 import { WishlistsModule } from './models/wishlists/wishlists.module';
-=======
 import { UserAddressModule } from './models/user_address/user_address.module';
 import { VouchersModule } from './models/vouchers/vouchers.module';
 import { PaymentsModule } from './models/payments/payments.module';
 import { VipModule } from './models/VIP/vip.module';
->>>>>>> main
 
 @Module({
   imports: [
@@ -59,14 +56,10 @@ import { VipModule } from './models/VIP/vip.module';
     ReviewsModule,
     RoleModule,
     UserModule,
-<<<<<<< HEAD
-    WishlistsModule,
-=======
     UserAddressModule,
     VouchersModule,
     PaymentsModule,
     VipModule,
->>>>>>> main
   ],
   controllers: [AppController],
   providers: [AppService],
