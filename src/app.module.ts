@@ -12,12 +12,19 @@ import { ProductsModule } from './models/products/products.module';
 import { ReviewsModule } from './models/reviews/reviews.module';
 import { RoleModule } from './models/role/role.module';
 import { UserModule } from './models/user/user.module';
+<<<<<<< HEAD
 import { WishlistsModule } from './models/wishlists/wishlists.module';
+=======
+import { UserAddressModule } from './models/user_address/user_address.module';
+import { VouchersModule } from './models/vouchers/vouchers.module';
+import { PaymentsModule } from './models/payments/payments.module';
+import { VipModule } from './models/VIP/vip.module';
+>>>>>>> main
 
 @Module({
   imports: [
     ConfigModule.forRoot({
-      isGlobal: true,
+      isGlobal: true, // ✅ Đảm bảo ConfigModule là global
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -39,7 +46,7 @@ import { WishlistsModule } from './models/wishlists/wishlists.module';
           password: configService.get<string>('password_DB'),
           database: configService.get<string>('name_DB'),
           autoLoadEntities: true,
-          synchronize: false, // set to true for auto DB creation during dev
+          synchronize: false,
         };
       },
     }),
@@ -52,13 +59,22 @@ import { WishlistsModule } from './models/wishlists/wishlists.module';
     ReviewsModule,
     RoleModule,
     UserModule,
+<<<<<<< HEAD
     WishlistsModule,
+=======
+    UserAddressModule,
+    VouchersModule,
+    PaymentsModule,
+    VipModule,
+>>>>>>> main
   ],
   controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule {
   constructor() {
-    console.log('✅ Connection to the Database has been successfully established.');
+    console.log(
+      '✅ Connection to the Database has been successfully established.',
+    );
   }
 }
