@@ -11,6 +11,7 @@ import { ProductsModule } from './models/products/products.module';
 import { ReviewsModule } from './models/reviews/reviews.module';
 import { RoleModule } from './models/role/role.module';
 import { UserModule } from './models/user/user.module';
+import { WishlistsModule } from './models/wishlists/wishlists.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { UserModule } from './models/user/user.module';
     ReviewsModule,
     RoleModule,
     UserModule,
+    WishlistsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
