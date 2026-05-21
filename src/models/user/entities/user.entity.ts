@@ -1,3 +1,4 @@
+
 import { Column, CreateDateColumn, Entity, ManyToMany, JoinTable, PrimaryGeneratedColumn } from 'typeorm';
 import { Role } from '../../role/entities/role.entity';
 
@@ -27,7 +28,13 @@ export class User {
   @Column({ length: 20, default: 'ACTIVE' })
   status: string;
 
-  @Column({ type: 'decimal', precision: 15, scale: 2, name: 'total_spending', default: 0 })
+  @Column({
+    type: 'decimal',
+    precision: 15,
+    scale: 2,
+    name: 'total_spending',
+    default: 0,
+  })
   totalSpending: number;
 
   @Column({ type: 'timestamp', name: 'vip_updated_at', nullable: true })
