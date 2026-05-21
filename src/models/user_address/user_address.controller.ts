@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { UserAddressService } from './user_address.service';
 import { CreateUserAddressDto } from './dto/create-user-address.dto';
@@ -7,7 +15,7 @@ import { UpdateUserAddressDto } from './dto/update-user-address.dto';
 @ApiTags('User Address')
 @Controller('user-address')
 export class UserAddressController {
-  constructor(private readonly userAddressService: UserAddressService) { }
+  constructor(private readonly userAddressService: UserAddressService) {}
 
   @Post(':userId')
   @ApiOperation({ summary: 'Create a new address for a user' })
@@ -15,7 +23,10 @@ export class UserAddressController {
     @Param('userId') userId: string,
     @Body() createUserAddressDto: CreateUserAddressDto,
   ) {
-    return this.userAddressService.createAddressForUser(userId, createUserAddressDto);
+    return this.userAddressService.createAddressForUser(
+      userId,
+      createUserAddressDto,
+    );
   }
 
   @Get(':userId')
@@ -31,7 +42,11 @@ export class UserAddressController {
     @Param('addressId') addressId: string,
     @Body() updateUserAddressDto: UpdateUserAddressDto,
   ) {
-    return this.userAddressService.updateAddressForUser(userId, addressId, updateUserAddressDto);
+    return this.userAddressService.updateAddressForUser(
+      userId,
+      addressId,
+      updateUserAddressDto,
+    );
   }
 
   @Delete(':userId/:addressId')

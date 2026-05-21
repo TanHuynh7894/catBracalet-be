@@ -14,7 +14,7 @@ export class UserAddressService {
 
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-  ) { }
+  ) {}
 
   private async verifyUserExists(userId: string): Promise<void> {
     const userExists = await this.userRepository.findOneBy({ id: userId });
@@ -23,7 +23,10 @@ export class UserAddressService {
     }
   }
 
-  async createAddressForUser(userId: string, createUserAddressDto: CreateUserAddressDto): Promise<UserAddress> {
+  async createAddressForUser(
+    userId: string,
+    createUserAddressDto: CreateUserAddressDto,
+  ): Promise<UserAddress> {
     await this.verifyUserExists(userId);
 
     // If setting as default, unset previous default addresses
@@ -31,7 +34,9 @@ export class UserAddressService {
       await this.userAddressRepository.update({ userId }, { isDefault: false });
     } else {
       // If user has no existing ACTIVE addresses, set this first one as default automatically
-      const count = await this.userAddressRepository.count({ where: { userId, status: 'ACTIVE' } });
+      const count = await this.userAddressRepository.count({
+        where: { userId, status: 'ACTIVE' },
+      });
       if (count === 0) {
         createUserAddressDto.isDefault = true;
       }
@@ -64,7 +69,9 @@ export class UserAddressService {
       where: { id: addressId, userId },
     });
     if (!address) {
-      throw new NotFoundException(`Address with id ${addressId} not found for this user`);
+      throw new NotFoundException(
+        `Address with id ${addressId} not found for this user`,
+      );
     }
 
     if (updateUserAddressDto.isDefault) {
@@ -75,14 +82,19 @@ export class UserAddressService {
     return this.userAddressRepository.save(address);
   }
 
-  async deleteAddressForUser(userId: string, addressId: string): Promise<{ message: string }> {
+  async deleteAddressForUser(
+    userId: string,
+    addressId: string,
+  ): Promise<{ message: string }> {
     await this.verifyUserExists(userId);
 
     const address = await this.userAddressRepository.findOne({
       where: { id: addressId, userId },
     });
     if (!address) {
-      throw new NotFoundException(`Address with id ${addressId} not found for this user`);
+      throw new NotFoundException(
+        `Address with id ${addressId} not found for this user`,
+      );
     }
 
     const wasDefault = address.isDefault;
@@ -104,14 +116,19 @@ export class UserAddressService {
     return { message: 'Address successfully deactivated' };
   }
 
-  async setDefaultAddressForUser(userId: string, addressId: string): Promise<UserAddress> {
+  async setDefaultAddressForUser(
+    userId: string,
+    addressId: string,
+  ): Promise<UserAddress> {
     await this.verifyUserExists(userId);
 
     const address = await this.userAddressRepository.findOne({
       where: { id: addressId, userId, status: 'ACTIVE' },
     });
     if (!address) {
-      throw new NotFoundException(`Active Address with id ${addressId} not found for this user`);
+      throw new NotFoundException(
+        `Active Address with id ${addressId} not found for this user`,
+      );
     }
 
     // Set all user's addresses to not default

@@ -10,13 +10,9 @@ import { JwtTokenService } from './services/jwt-token.service';
 import { Role } from '../role/entities/role.entity';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([User, Role]),
-    JwtModule.register({}),
-  ],
+  imports: [TypeOrmModule.forFeature([User, Role]), JwtModule.register({})],
   controllers: [UserController],
   providers: [UserService, OtpService, JwtTokenService],
   exports: [JwtModule, JwtTokenService],
 })
-export class UserModule { }
-
+export class UserModule {}

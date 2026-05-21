@@ -23,7 +23,6 @@ import { LogoutDto } from './dto/logout.dto';
 import { AddUserRoleDto } from './dto/add-user-role.dto';
 import { RemoveUserRoleDto } from './dto/remove-user-role.dto';
 
-
 @ApiTags('User')
 @Controller('user')
 export class UserController {
@@ -114,8 +113,14 @@ export class UserController {
   }
 
   @Delete(':id/roles')
-  removeRole(@Param('id') userId: string, @Body() removeUserRoleDto: RemoveUserRoleDto) {
-    return this.userService.removeRoleFromUser(userId, removeUserRoleDto.roleId);
+  removeRole(
+    @Param('id') userId: string,
+    @Body() removeUserRoleDto: RemoveUserRoleDto,
+  ) {
+    return this.userService.removeRoleFromUser(
+      userId,
+      removeUserRoleDto.roleId,
+    );
   }
 
   @Delete(':id')
