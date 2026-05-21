@@ -39,6 +39,14 @@ export class MaterialsController {
     return this.materialsService.findAll();
   }
 
+  @Get('by-name/:name')
+  @ApiOperation({ summary: 'Get materials by name' })
+  @ApiParam({ name: 'name', description: 'Material name keyword' })
+  @ApiOkResponse({ type: Material, isArray: true })
+  findByName(@Param('name') name: string) {
+    return this.materialsService.findByName(name);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get material by id' })
   @ApiParam({ name: 'id', description: 'Material UUID' })

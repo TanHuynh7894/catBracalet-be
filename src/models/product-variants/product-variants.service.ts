@@ -56,6 +56,30 @@ export class ProductVariantsService {
     return variants.map((variant) => this.mapVariantImageUrls(variant));
   }
 
+  async findByName(name: string): Promise<ProductVariant[]> {
+    const keyword = name.trim();
+
+    if (!keyword) {
+      return [];
+    }
+
+    const variants = await this.productVariantRepository
+      .createQueryBuilder('variant')
+      .leftJoinAndSelect('variant.productVariantMappings', 'mapping')
+      .leftJoinAndSelect('mapping.product', 'product')
+      .leftJoinAndSelect('product.category', 'category')
+      .leftJoinAndSelect('product.material', 'material')
+      .leftJoinAndSelect('product.productImages', 'productImage')
+      .where('product.productName ILIKE :keyword', {
+        keyword: `%${keyword}%`,
+      })
+      .distinct(true)
+      .orderBy('variant.sku', 'ASC')
+      .getMany();
+
+    return variants.map((variant) => this.mapVariantImageUrls(variant));
+  }
+
   async findOne(id: string): Promise<ProductVariant> {
     const productVariant = await this.productVariantRepository.findOne({
       where: { id },

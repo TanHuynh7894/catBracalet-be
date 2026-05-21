@@ -39,6 +39,14 @@ export class ProductsController {
     return this.productsService.findAll();
   }
 
+  @Get('by-name/:name')
+  @ApiOperation({ summary: 'Get products by name' })
+  @ApiParam({ name: 'name', description: 'Product name keyword' })
+  @ApiOkResponse({ type: Product, isArray: true })
+  findByName(@Param('name') name: string) {
+    return this.productsService.findByName(name);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get product by id' })
   @ApiParam({ name: 'id', description: 'Product UUID' })

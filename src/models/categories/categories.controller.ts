@@ -40,6 +40,14 @@ export class CategoriesController {
     return this.categoriesService.findAll();
   }
 
+  @Get('by-name/:name')
+  @ApiOperation({ summary: 'Get categories by name' })
+  @ApiParam({ name: 'name', description: 'Category name keyword' })
+  @ApiOkResponse({ type: Category, isArray: true })
+  findByName(@Param('name') name: string) {
+    return this.categoriesService.findByName(name);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get category by id' })
   @ApiParam({

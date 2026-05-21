@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 
 import {
   CreateMaterialDto,
@@ -33,6 +33,23 @@ export class MaterialsService {
 
   async findAll(): Promise<Material[]> {
     return await this.materialRepository.find();
+  }
+
+  async findByName(name: string): Promise<Material[]> {
+    const keyword = name.trim();
+
+    if (!keyword) {
+      return [];
+    }
+
+    return await this.materialRepository.find({
+      where: {
+        materialName: ILike(`%${keyword}%`),
+      },
+      order: {
+        materialName: 'ASC',
+      },
+    });
   }
 
   async findOne(id: string): Promise<Material> {

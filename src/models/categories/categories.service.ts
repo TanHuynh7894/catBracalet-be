@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 
 import {
   CategoryStatus,
@@ -30,6 +30,23 @@ export class CategoriesService {
 
   async findAll(): Promise<Category[]> {
     return await this.categoryRepository.find();
+  }
+
+  async findByName(name: string): Promise<Category[]> {
+    const keyword = name.trim();
+
+    if (!keyword) {
+      return [];
+    }
+
+    return await this.categoryRepository.find({
+      where: {
+        categoryName: ILike(`%${keyword}%`),
+      },
+      order: {
+        categoryName: 'ASC',
+      },
+    });
   }
 
   async findOne(id: string): Promise<Category> {

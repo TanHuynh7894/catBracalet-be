@@ -41,6 +41,14 @@ export class ProductVariantsController {
     return this.productVariantsService.findAll();
   }
 
+  @Get('by-name/:name')
+  @ApiOperation({ summary: 'Get product variants by product name' })
+  @ApiParam({ name: 'name', description: 'Product name keyword' })
+  @ApiOkResponse({ type: ProductVariant, isArray: true })
+  findByName(@Param('name') name: string) {
+    return this.productVariantsService.findByName(name);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get product variant by id' })
   @ApiParam({ name: 'id', description: 'Product variant UUID' })

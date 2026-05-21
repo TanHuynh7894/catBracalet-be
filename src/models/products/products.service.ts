@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { ILike, Repository } from 'typeorm';
 
 import {
   CreateProductDto,
@@ -31,6 +31,23 @@ export class ProductsService {
 
   async findAll(): Promise<Product[]> {
     return await this.productRepository.find();
+  }
+
+  async findByName(name: string): Promise<Product[]> {
+    const keyword = name.trim();
+
+    if (!keyword) {
+      return [];
+    }
+
+    return await this.productRepository.find({
+      where: {
+        productName: ILike(`%${keyword}%`),
+      },
+      order: {
+        productName: 'ASC',
+      },
+    });
   }
 
   async findOne(id: string): Promise<Product> {
