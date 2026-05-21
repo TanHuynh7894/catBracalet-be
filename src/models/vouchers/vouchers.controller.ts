@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { VouchersService } from './vouchers.service';
 import { CreateVouchersDto } from './dto/create-vouchers.dto';
@@ -7,7 +15,7 @@ import { UpdateVouchersDto } from './dto/update-vouchers.dto';
 @ApiTags('Vouchers')
 @Controller('vouchers')
 export class VouchersController {
-  constructor(private readonly vouchersService: VouchersService) { }
+  constructor(private readonly vouchersService: VouchersService) {}
 
   @Post()
   create(@Body() createVouchersDto: CreateVouchersDto) {
@@ -25,7 +33,10 @@ export class VouchersController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateVouchersDto: UpdateVouchersDto) {
+  update(
+    @Param('id') id: string,
+    @Body() updateVouchersDto: UpdateVouchersDto,
+  ) {
     return this.vouchersService.update(id, updateVouchersDto);
   }
 

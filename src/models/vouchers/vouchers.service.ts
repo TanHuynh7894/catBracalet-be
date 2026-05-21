@@ -10,7 +10,7 @@ export class VouchersService {
   constructor(
     @InjectRepository(Vouchers)
     private readonly vouchersRepository: Repository<Vouchers>,
-  ) { }
+  ) {}
 
   create(createVouchersDto: CreateVouchersDto) {
     const newVoucher = this.vouchersRepository.create(createVouchersDto);

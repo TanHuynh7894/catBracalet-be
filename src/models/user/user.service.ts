@@ -5,7 +5,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -37,7 +36,6 @@ interface JwtPayload {
 }
 
 import { Role } from '../role/entities/role.entity';
-
 
 @Injectable()
 export class UserService {
@@ -90,7 +88,7 @@ export class UserService {
    */
   async verifyOtp(
     verifyOtpDto: VerifyOtpDto,
-  ): Promise<{ message: string; user: User }> {
+  ): Promise<{ message: string; user: Omit<User, 'password'> }> {
     const { email, otp } = verifyOtpDto;
 
     const pendingUser = this.otpService.verifyOtp(
@@ -101,20 +99,29 @@ export class UserService {
       throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn');
     }
 
+    // Tìm role 'CUSTOMER' từ bảng roles theo cột role_name
+    const customerRole = await this.roleRepository.findOne({
+      where: { name: 'CUSTOMER', status: 'ACTIVE' },
+    });
+
     const newUser = this.userRepository.create({
       email: pendingUser.email,
       fullName: pendingUser.fullName,
       password: pendingUser.password,
       phone: pendingUser.phone,
       status: 'ACTIVE',
+      roles: customerRole ? [customerRole] : [],
     });
 
     const savedUser = await this.userRepository.save(newUser);
     this.otpService.removePendingUser(email);
 
+    // Loại bỏ password trước khi trả về
+    const { password: _, ...userWithoutPassword } = savedUser;
+
     return {
       message: 'Xác thực OTP thành công. Tài khoản đã được kích hoạt!',
-      user: savedUser,
+      user: userWithoutPassword,
     };
   }
 
@@ -129,6 +136,7 @@ export class UserService {
   }> {
     const { email, password } = loginUserDto;
 
+    // Lấy user mà không load relations
     const user = await this.userRepository.findOne({
       where: { email },
       relations: ['roles', 'vipLevel'],
@@ -164,8 +172,15 @@ export class UserService {
       refreshTokenExpiresAt,
     );
 
+    // Lấy roles sử dụng query builder để chỉ lấy roles hợp lệ (có name không null)
+    const userWithRoles = await this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.roles', 'role', 'role.name IS NOT NULL')
+      .where('user.id = :userId', { userId: user.id })
+      .getOne();
+
     // Tạo object mới không chứa password
-    const userResponse = {
+    const userResponse: Omit<User, 'password'> = {
       id: user.id,
       vipLevelId: user.vipLevelId,
       fullName: user.fullName,
@@ -176,7 +191,7 @@ export class UserService {
       totalSpending: user.totalSpending,
       vipUpdatedAt: user.vipUpdatedAt,
       createdAt: user.createdAt,
-      roles: user.roles,
+      roles: userWithRoles?.roles || [],
       vipLevel: user.vipLevel,
     };
 
@@ -359,10 +374,12 @@ export class UserService {
     return this.userRepository.update(id, updateUserDto);
   }
 
-
   async addRoleToUser(userId: string, roleId: string): Promise<User> {
     const user = await this.findOne(userId);
-    const role = await this.roleRepository.findOneBy({ id: roleId, status: 'ACTIVE' });
+    const role = await this.roleRepository.findOneBy({
+      id: roleId,
+      status: 'ACTIVE',
+    });
     if (!role) {
       throw new NotFoundException(`Active Role with id ${roleId} not found`);
     }
@@ -389,7 +406,10 @@ export class UserService {
     return result;
   }
 
-  async updateProfile(id: string, updateDto: UpdateUserDto): Promise<Omit<User, 'password'>> {
+  async updateProfile(
+    id: string,
+    updateDto: UpdateUserDto,
+  ): Promise<Omit<User, 'password'>> {
     const user = await this.findOne(id);
 
     // Chỉ cho phép cập nhật 1 số trường
@@ -402,7 +422,10 @@ export class UserService {
     return result;
   }
 
-  async changePassword(id: string, changePasswordDto: ChangePasswordDto): Promise<{ message: string }> {
+  async changePassword(
+    id: string,
+    changePasswordDto: ChangePasswordDto,
+  ): Promise<{ message: string }> {
     const { oldPassword, newPassword } = changePasswordDto;
 
     const user = await this.userRepository.findOne({ where: { id } });
@@ -429,4 +452,3 @@ export class UserService {
     return this.userRepository.delete(id);
   }
 }
-
