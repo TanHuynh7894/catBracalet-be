@@ -5,7 +5,6 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  IsUUID,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -16,14 +15,6 @@ export enum ProductVariantStatus {
 }
 
 export class CreateProductVariantDto {
-  @ApiProperty({
-    description: 'The product UUID for this variant',
-    example: '90d9d3de-9e38-4d45-bc8a-4de847f9d739',
-  })
-  @IsUUID()
-  @IsNotEmpty()
-  productId: string;
-
   @ApiProperty({
     description: 'The SKU of the variant',
     example: 'CB-PRM-BLK-S',

@@ -10,6 +10,7 @@ import {
 import { Category } from '../../categories/entities/category.entity';
 import { Material } from '../../materials/entities/material.entity';
 import { ProductImage } from '../../product-images/entities/product-image.entity';
+import { ProductVariantMapping } from '../../product-variant-mappings/entities/product-variant-mapping.entity';
 
 @Entity('products')
 @Check(`status IN ('ACTIVE', 'INACTIVE')`)
@@ -33,6 +34,12 @@ export class Product {
 
   @OneToMany(() => ProductImage, (productImage) => productImage.product)
   productImages?: ProductImage[];
+
+  @OneToMany(
+    () => ProductVariantMapping,
+    (productVariantMapping) => productVariantMapping.product,
+  )
+  productVariantMappings?: ProductVariantMapping[];
 
   @Column({ length: 255, name: 'product_name' })
   productName: string;

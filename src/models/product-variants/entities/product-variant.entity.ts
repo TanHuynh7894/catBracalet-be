@@ -2,11 +2,10 @@ import {
   Check,
   Column,
   Entity,
-  JoinColumn,
-  ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Product } from '../../products/entities/product.entity';
+import { ProductVariantMapping } from '../../product-variant-mappings/entities/product-variant-mapping.entity';
 
 @Entity('product_variants')
 @Check(`stock_quantity >= 0`)
@@ -15,12 +14,11 @@ export class ProductVariant {
   @PrimaryGeneratedColumn('uuid', { name: 'variant_id' })
   id: string;
 
-  @Column({ type: 'uuid', name: 'product_id' })
-  productId: string;
-
-  @ManyToOne(() => Product, { nullable: false })
-  @JoinColumn({ name: 'product_id', referencedColumnName: 'id' })
-  product: Product;
+  @OneToMany(
+    () => ProductVariantMapping,
+    (productVariantMapping) => productVariantMapping.variant,
+  )
+  productVariantMappings?: ProductVariantMapping[];
 
   @Column({ length: 100, unique: true })
   sku: string;

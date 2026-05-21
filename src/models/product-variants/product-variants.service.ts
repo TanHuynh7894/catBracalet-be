@@ -13,8 +13,6 @@ import {
 } from './dto/create-product-variant.dto';
 import { UpdateProductVariantDto } from './dto/update-product-variant.dto';
 import { ProductVariant } from './entities/product-variant.entity';
-import { Product } from '../products/entities/product.entity';
-import { ProductImage } from '../product-images/entities/product-image.entity';
 
 @Injectable()
 export class ProductVariantsService {
@@ -22,10 +20,6 @@ export class ProductVariantsService {
     private readonly configService: ConfigService,
     @InjectRepository(ProductVariant)
     private readonly productVariantRepository: Repository<ProductVariant>,
-    @InjectRepository(Product)
-    private readonly productRepository: Repository<Product>,
-    @InjectRepository(ProductImage)
-    private readonly productImageRepository: Repository<ProductImage>,
   ) {}
 
   async create(
@@ -34,11 +28,7 @@ export class ProductVariantsService {
     const stockQuantity = createProductVariantDto.stockQuantity ?? 0;
     const extraPrice = createProductVariantDto.extraPrice ?? 0;
 
-    await this.validateVariantBusinessRules(
-      createProductVariantDto.productId,
-      stockQuantity,
-      extraPrice,
-    );
+    this.validateVariantBusinessRules(stockQuantity, extraPrice);
 
     const newProductVariant = this.productVariantRepository.create({
       ...createProductVariantDto,
@@ -53,10 +43,12 @@ export class ProductVariantsService {
   async findAll(): Promise<ProductVariant[]> {
     const variants = await this.productVariantRepository.find({
       relations: {
-        product: {
-          category: true,
-          material: true,
-          productImages: true,
+        productVariantMappings: {
+          product: {
+            category: true,
+            material: true,
+            productImages: true,
+          },
         },
       },
     });
@@ -68,10 +60,12 @@ export class ProductVariantsService {
     const productVariant = await this.productVariantRepository.findOne({
       where: { id },
       relations: {
-        product: {
-          category: true,
-          material: true,
-          productImages: true,
+        productVariantMappings: {
+          product: {
+            category: true,
+            material: true,
+            productImages: true,
+          },
         },
       },
     });
@@ -97,17 +91,12 @@ export class ProductVariantsService {
       );
     }
 
-    const productId = updateProductVariantDto.productId ?? productVariant.productId;
     const stockQuantity =
       updateProductVariantDto.stockQuantity ?? productVariant.stockQuantity;
     const extraPrice =
       updateProductVariantDto.extraPrice ?? Number(productVariant.extraPrice);
 
-    await this.validateVariantBusinessRules(
-      productId,
-      stockQuantity,
-      extraPrice,
-    );
+    this.validateVariantBusinessRules(stockQuantity, extraPrice);
 
     this.productVariantRepository.merge(
       productVariant,
@@ -147,29 +136,19 @@ export class ProductVariantsService {
     return productVariant;
   }
 
-  private async validateVariantBusinessRules(
-    productId: string,
+  private validateVariantBusinessRules(
     stockQuantity: number,
     extraPrice: number,
-  ): Promise<void> {
+  ): void {
     if (stockQuantity < 0) {
       throw new BadRequestException(
         'stockQuantity must be greater than or equal to 0.',
       );
     }
 
-    const product = await this.productRepository.findOneBy({ id: productId });
-
-    if (!product) {
-      throw new NotFoundException(
-        `Product with id ${productId} not found`,
-      );
-    }
-
-    const basePrice = Number(product.basePrice);
-    if (Number(extraPrice) < basePrice) {
+    if (Number(extraPrice) < 0) {
       throw new BadRequestException(
-        `extraPrice must be greater than or equal to product basePrice. basePrice=${basePrice}, receivedExtraPrice=${Number(extraPrice)}`,
+        'extraPrice must be greater than or equal to 0.',
       );
     }
   }
@@ -180,25 +159,36 @@ export class ProductVariantsService {
       '',
     );
 
-    if (!variant.product?.productImages?.length || !baseUrl) {
+    if (!variant.productVariantMappings?.length || !baseUrl) {
       return variant;
     }
 
     return {
       ...variant,
-      product: {
-        ...variant.product,
-        productImages: variant.product.productImages.map((image) => {
-          if (/^https?:\/\//i.test(image.imageUrl)) {
-            return image;
-          }
+      productVariantMappings: variant.productVariantMappings.map((mapping) => {
+        const product = mapping.product;
 
-          return {
-            ...image,
-            imageUrl: `${baseUrl}${image.imageUrl}`,
-          };
-        }),
-      },
+        if (!product?.productImages?.length) {
+          return mapping;
+        }
+
+        return {
+          ...mapping,
+          product: {
+            ...product,
+            productImages: product.productImages.map((image) => {
+              if (/^https?:\/\//i.test(image.imageUrl)) {
+                return image;
+              }
+
+              return {
+                ...image,
+                imageUrl: `${baseUrl}${image.imageUrl}`,
+              };
+            }),
+          },
+        };
+      }),
     } as ProductVariant;
   }
 }

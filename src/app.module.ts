@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { CategoriesModule } from './models/categories/categories.module';
 import { MaterialsModule } from './models/materials/materials.module';
 import { ProductImagesModule } from './models/product-images/product-images.module';
+import { ProductVariantMappingsModule } from './models/product-variant-mappings/product-variant-mappings.module';
 import { ProductVariantsModule } from './models/product-variants/product-variants.module';
 import { ProductsModule } from './models/products/products.module';
 import { ReviewsModule } from './models/reviews/reviews.module';
@@ -45,6 +46,7 @@ import { WishlistsModule } from './models/wishlists/wishlists.module';
     CategoriesModule,
     MaterialsModule,
     ProductImagesModule,
+    ProductVariantMappingsModule,
     ProductVariantsModule,
     ProductsModule,
     ReviewsModule,
