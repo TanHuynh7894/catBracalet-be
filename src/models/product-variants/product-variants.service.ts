@@ -11,6 +11,10 @@ import {
   CreateProductVariantDto,
   ProductVariantStatus,
 } from './dto/create-product-variant.dto';
+import {
+  GetProductListDto,
+  ProductListSortBy,
+} from './dto/get-product-list.dto';
 import { UpdateProductVariantDto } from './dto/update-product-variant.dto';
 import { ProductVariant } from './entities/product-variant.entity';
 
@@ -52,6 +56,129 @@ export class ProductVariantsService {
         },
       },
     });
+
+    return variants.map((variant) => this.mapVariantImageUrls(variant));
+  }
+
+  async getProductList(
+    params: GetProductListDto,
+  ): Promise<ProductVariant[]> {
+    const {
+      keyword,
+      categoryId,
+      minPrice,
+      maxPrice,
+      color,
+      size,
+      rating,
+      sortBy,
+    } = params;
+
+    if (
+      minPrice !== undefined &&
+      maxPrice !== undefined &&
+      minPrice > maxPrice
+    ) {
+      throw new BadRequestException(
+        'minPrice cannot be greater than maxPrice.',
+      );
+    }
+
+    const query = this.productVariantRepository
+      .createQueryBuilder('variant')
+      .leftJoinAndSelect('variant.productVariantMappings', 'mapping')
+      .leftJoinAndSelect('mapping.product', 'product')
+      .leftJoinAndSelect('product.category', 'category')
+      .leftJoinAndSelect('product.material', 'material')
+      .leftJoinAndSelect('product.productImages', 'productImage')
+      .where('variant.status = :variantStatus', {
+        variantStatus: ProductVariantStatus.ACTIVE,
+      })
+      .andWhere('mapping.status = :mappingStatus', {
+        mappingStatus: 'ACTIVE',
+      })
+      .andWhere('product.status = :productStatus', {
+        productStatus: 'ACTIVE',
+      })
+      .distinct(true);
+
+    if (keyword?.trim()) {
+      query.andWhere('product.productName ILIKE :keyword', {
+        keyword: `%${keyword.trim()}%`,
+      });
+    }
+
+    if (categoryId) {
+      query.andWhere('product.categoryId = :categoryId', {
+        categoryId,
+      });
+    }
+
+    if (color?.trim()) {
+      query.andWhere('variant.color ILIKE :color', {
+        color: `%${color.trim()}%`,
+      });
+    }
+
+    if (size?.trim()) {
+      query.andWhere('variant.size ILIKE :size', {
+        size: `%${size.trim()}%`,
+      });
+    }
+
+    if (minPrice !== undefined) {
+      query.andWhere(
+        '(COALESCE(product.base_price, 0) + COALESCE(variant.extra_price, 0)) >= :minPrice',
+        { minPrice },
+      );
+    }
+
+    if (maxPrice !== undefined) {
+      query.andWhere(
+        '(COALESCE(product.base_price, 0) + COALESCE(variant.extra_price, 0)) <= :maxPrice',
+        { maxPrice },
+      );
+    }
+
+    if (rating !== undefined) {
+      query.andWhere(
+        `(SELECT COALESCE(AVG(rv.rating), 0)
+          FROM reviews rv
+          WHERE rv.product_id = product.product_id
+            AND rv.status = 'ACTIVE') >= :rating`,
+        { rating },
+      );
+    }
+
+    switch (sortBy) {
+      case ProductListSortBy.PRICE_ASC:
+        query.orderBy(
+          '(COALESCE(product.base_price, 0) + COALESCE(variant.extra_price, 0))',
+          'ASC',
+        );
+        break;
+      case ProductListSortBy.PRICE_DESC:
+        query.orderBy(
+          '(COALESCE(product.base_price, 0) + COALESCE(variant.extra_price, 0))',
+          'DESC',
+        );
+        break;
+      case ProductListSortBy.RATING_DESC:
+        query.orderBy(
+          `(SELECT COALESCE(AVG(rv.rating), 0)
+            FROM reviews rv
+            WHERE rv.product_id = product.product_id
+              AND rv.status = 'ACTIVE')`,
+          'DESC',
+        );
+        break;
+      case ProductListSortBy.NEWEST:
+      default:
+        query.orderBy('mapping.createdAt', 'DESC');
+        break;
+    }
+
+    const variants = await query.getMany();
 
     return variants.map((variant) => this.mapVariantImageUrls(variant));
   }

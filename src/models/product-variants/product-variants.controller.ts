@@ -6,16 +6,22 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 
 import { CreateProductVariantDto } from './dto/create-product-variant.dto';
+import {
+  GetProductListDto,
+  ProductListSortBy,
+} from './dto/get-product-list.dto';
 import { UpdateProductVariantDto } from './dto/update-product-variant.dto';
 import { ProductVariant } from './entities/product-variant.entity';
 import { ProductVariantsService } from './product-variants.service';
@@ -39,6 +45,25 @@ export class ProductVariantsController {
   @ApiOkResponse({ type: ProductVariant, isArray: true })
   findAll() {
     return this.productVariantsService.findAll();
+  }
+
+  @Get('filter')
+  @ApiOperation({ summary: 'Get filtered product variant list' })
+  @ApiQuery({ name: 'keyword', required: false, type: String })
+  @ApiQuery({ name: 'categoryId', required: false, type: String })
+  @ApiQuery({ name: 'minPrice', required: false, type: Number })
+  @ApiQuery({ name: 'maxPrice', required: false, type: Number })
+  @ApiQuery({ name: 'color', required: false, type: String })
+  @ApiQuery({ name: 'size', required: false, type: String })
+  @ApiQuery({ name: 'rating', required: false, type: Number })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    enum: ProductListSortBy,
+  })
+  @ApiOkResponse({ type: ProductVariant, isArray: true })
+  getProductList(@Query() params: GetProductListDto) {
+    return this.productVariantsService.getProductList(params);
   }
 
   @Get('by-name/:name')
