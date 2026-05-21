@@ -18,6 +18,7 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { User } from './entities/user.entity';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 import { OtpService } from './services/otp.service';
 import { JwtTokenService } from './services/jwt-token.service';
@@ -395,6 +396,54 @@ export class UserService {
     user.roles = user.roles.filter((r) => r.id !== roleId);
     await this.userRepository.save(user);
     return user;
+  }
+
+  async getProfile(id: string): Promise<Omit<User, 'password' | 'roles'>> {
+    const user = await this.findOne(id);
+    const { password, ...result } = user;
+    return result;
+  }
+
+  async updateProfile(
+    id: string,
+    updateDto: UpdateUserDto,
+  ): Promise<Omit<User, 'password'>> {
+    const user = await this.findOne(id);
+
+    // Chỉ cho phép cập nhật 1 số trường
+    if (updateDto.fullName) user.fullName = updateDto.fullName;
+    if (updateDto.phone) user.phone = updateDto.phone;
+    if (updateDto.avatar) user.avatar = updateDto.avatar;
+
+    const updatedUser = await this.userRepository.save(user);
+    const { password: _, ...result } = updatedUser;
+    return result;
+  }
+
+  async changePassword(
+    id: string,
+    changePasswordDto: ChangePasswordDto,
+  ): Promise<{ message: string }> {
+    const { oldPassword, newPassword } = changePasswordDto;
+
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException('Người dùng không tồn tại');
+    }
+
+    const isPasswordValid = await bcrypt.compare(oldPassword, user.password);
+    if (!isPasswordValid) {
+      throw new BadRequestException('Mật khẩu hiện tại không chính xác');
+    }
+
+    if (newPassword.length < 6) {
+      throw new BadRequestException('Mật khẩu mới phải có ít nhất 6 ký tự');
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await this.userRepository.save(user);
+
+    return { message: 'Đổi mật khẩu thành công' };
   }
 
   remove(id: string) {

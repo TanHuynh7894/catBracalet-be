@@ -1,0 +1,27 @@
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+export class CreateOrderDto {
+  @ApiProperty({
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: 'The user ID associated with the order',
+  })
+  userId: string;
+
+  @ApiProperty({
+    example: '987e6543-e21b-12d3-a456-426614174111',
+    description: 'The address ID for the order',
+  })
+  addressId: string;
+
+  @ApiPropertyOptional({
+    example: 'vch-001',
+    description: 'The voucher ID applied to the order',
+  })
+  voucherId?: string;
+
+  @ApiProperty({ example: 100.5, description: 'The total amount of the order' })
+  totalAmount: number;
+
+  @ApiProperty({ example: 'PENDING', description: 'The status of the order' })
+  status: string;
+}
