@@ -5,12 +5,14 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { RoleModule } from './models/role/role.module';
 import { UserModule } from './models/user/user.module';
-import { CartModule } from './models/cart/cart.module';
+import { UserAddressModule } from './models/user_address/user_address.module';
+import { VouchersModule } from './models/vouchers/vouchers.module';
+import { PaymentsModule } from './models/payments/payments.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
-      isGlobal: true,
+      isGlobal: true, // ✅ Đảm bảo ConfigModule là global
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -32,19 +34,23 @@ import { CartModule } from './models/cart/cart.module';
           password: configService.get<string>('password_DB'),
           database: configService.get<string>('name_DB'),
           autoLoadEntities: true,
-          synchronize: false, // set to true for auto DB creation during dev
+          synchronize: false,
         };
       },
     }),
     RoleModule,
     UserModule,
-    CartModule,
+    UserAddressModule,
+    VouchersModule,
+    PaymentsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule {
   constructor() {
-    console.log('✅ Connection to the Database has been successfully established.');
+    console.log(
+      '✅ Connection to the Database has been successfully established.',
+    );
   }
 }
