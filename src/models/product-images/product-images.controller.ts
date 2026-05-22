@@ -29,9 +29,7 @@ import { ProductImagesService } from './product-images.service';
 @ApiTags('Product Images')
 @Controller('product-images')
 export class ProductImagesController {
-  constructor(
-    private readonly productImagesService: ProductImagesService,
-  ) {}
+  constructor(private readonly productImagesService: ProductImagesService) {}
 
   @Post()
   @ApiOperation({ summary: 'Create a product image' })

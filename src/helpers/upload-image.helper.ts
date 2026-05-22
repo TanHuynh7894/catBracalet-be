@@ -36,9 +36,7 @@ function createFileName(originalName: string): string {
   return `${Date.now()}-${Math.round(Math.random() * 1e9)}${extension}`;
 }
 
-export function buildImagePublicUrl(
-  absoluteFilePath: string,
-): string {
+export function buildImagePublicUrl(absoluteFilePath: string): string {
   const relativePath = relative(process.cwd(), absoluteFilePath)
     .replace(/\\/g, '/')
     .replace(/^\.\//, '');

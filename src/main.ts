@@ -28,16 +28,19 @@ async function bootstrap() {
   const documentFactory = () => SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, documentFactory);
 
-  app.getHttpAdapter().getInstance().get('/', (_req: Request, res: Response) => {
-    const baseUrl = (process.env.url_base_BE || '').replace(/\/$/, '');
-    const docsPath = '/api/docs';
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .get('/', (_req: Request, res: Response) => {
+      const baseUrl = (process.env.url_base_BE || '').replace(/\/$/, '');
+      const docsPath = '/api/docs';
 
-    if (baseUrl) {
-      return res.redirect(`${baseUrl}${docsPath}`);
-    }
+      if (baseUrl) {
+        return res.redirect(`${baseUrl}${docsPath}`);
+      }
 
-    return res.redirect(docsPath);
-  });
+      return res.redirect(docsPath);
+    });
 
   await app.listen(process.env.PORT ?? 3000);
 }

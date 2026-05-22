@@ -123,7 +123,9 @@ export class ProductVariantMappingsService {
       id: variantId,
     });
     if (!variant) {
-      throw new NotFoundException(`Product variant with id ${variantId} not found`);
+      throw new NotFoundException(
+        `Product variant with id ${variantId} not found`,
+      );
     }
   }
 }

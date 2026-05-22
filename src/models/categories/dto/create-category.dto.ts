@@ -7,13 +7,19 @@ export enum CategoryStatus {
 }
 
 export class CreateCategoryDto {
-  @ApiProperty({ description: 'The name of the category', example: 'Accessories' })
+  @ApiProperty({
+    description: 'The name of the category',
+    example: 'Accessories',
+  })
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
   categoryName: string;
 
-  @ApiPropertyOptional({ description: 'The description of the category', example: 'Collection for cat accessories' })
+  @ApiPropertyOptional({
+    description: 'The description of the category',
+    example: 'Collection for cat accessories',
+  })
   @IsOptional()
   @IsString()
   description?: string;

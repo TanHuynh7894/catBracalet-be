@@ -6,10 +6,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
 
-import {
-  CreateProductDto,
-  ProductStatus,
-} from './dto/create-product.dto';
+import { CreateProductDto, ProductStatus } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Product } from './entities/product.entity';
 
@@ -54,9 +51,7 @@ export class ProductsService {
     const product = await this.productRepository.findOneBy({ id });
 
     if (!product) {
-      throw new NotFoundException(
-        `Product with id ${id} not found`,
-      );
+      throw new NotFoundException(`Product with id ${id} not found`);
     }
 
     return product;
@@ -69,9 +64,7 @@ export class ProductsService {
     const product = await this.findOne(id);
 
     if ('status' in updateProductDto) {
-      throw new BadRequestException(
-        'Status cannot be updated in this API',
-      );
+      throw new BadRequestException('Status cannot be updated in this API');
     }
 
     this.productRepository.merge(product, updateProductDto);

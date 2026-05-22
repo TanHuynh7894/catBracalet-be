@@ -7,10 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
 
-import {
-  CreateMaterialDto,
-  MaterialStatus,
-} from './dto/create-material.dto';
+import { CreateMaterialDto, MaterialStatus } from './dto/create-material.dto';
 
 import { UpdateMaterialDto } from './dto/update-material.dto';
 import { Material } from './entities/material.entity';
@@ -56,9 +53,7 @@ export class MaterialsService {
     const material = await this.materialRepository.findOneBy({ id });
 
     if (!material) {
-      throw new NotFoundException(
-        `Material with id ${id} not found`,
-      );
+      throw new NotFoundException(`Material with id ${id} not found`);
     }
 
     return material;
@@ -72,9 +67,7 @@ export class MaterialsService {
 
     // Không cho update status
     if ('status' in updateMaterialDto) {
-      throw new BadRequestException(
-        'Status cannot be updated in this API',
-      );
+      throw new BadRequestException('Status cannot be updated in this API');
     }
 
     this.materialRepository.merge(material, updateMaterialDto);

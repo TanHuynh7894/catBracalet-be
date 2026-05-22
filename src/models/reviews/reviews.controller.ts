@@ -50,10 +50,7 @@ export class ReviewsController {
   @ApiOperation({ summary: 'Update review (status cannot be updated here)' })
   @ApiParam({ name: 'id', description: 'Review UUID' })
   @ApiOkResponse({ type: Review })
-  update(
-    @Param('id') id: string,
-    @Body() updateReviewDto: UpdateReviewDto,
-  ) {
+  update(@Param('id') id: string, @Body() updateReviewDto: UpdateReviewDto) {
     return this.reviewsService.update(id, updateReviewDto);
   }
 

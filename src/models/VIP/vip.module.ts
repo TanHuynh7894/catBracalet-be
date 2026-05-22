@@ -7,11 +7,9 @@ import { VipService } from './vip.service';
 import { VipController } from './vip.controller';
 
 @Module({
-    imports: [
-        TypeOrmModule.forFeature([VipLevel, VipHistory, User]),
-    ],
-    controllers: [VipController],
-    providers: [VipService],
-    exports: [VipService],
+  imports: [TypeOrmModule.forFeature([VipLevel, VipHistory, User])],
+  controllers: [VipController],
+  providers: [VipService],
+  exports: [VipService],
 })
-export class VipModule { }
+export class VipModule {}

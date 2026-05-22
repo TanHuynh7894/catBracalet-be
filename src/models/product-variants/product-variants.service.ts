@@ -60,9 +60,7 @@ export class ProductVariantsService {
     return variants.map((variant) => this.mapVariantImageUrls(variant));
   }
 
-  async getProductList(
-    params: GetProductListDto,
-  ): Promise<ProductVariant[]> {
+  async getProductList(params: GetProductListDto): Promise<ProductVariant[]> {
     const {
       keyword,
       categoryId,
@@ -222,9 +220,7 @@ export class ProductVariantsService {
     });
 
     if (!productVariant) {
-      throw new NotFoundException(
-        `Product variant with id ${id} not found`,
-      );
+      throw new NotFoundException(`Product variant with id ${id} not found`);
     }
 
     return this.mapVariantImageUrls(productVariant);
@@ -237,9 +233,7 @@ export class ProductVariantsService {
     const productVariant = await this.findOneEntity(id);
 
     if ('status' in updateProductVariantDto) {
-      throw new BadRequestException(
-        'Status cannot be updated in this API',
-      );
+      throw new BadRequestException('Status cannot be updated in this API');
     }
 
     const stockQuantity =
@@ -276,12 +270,12 @@ export class ProductVariantsService {
   }
 
   private async findOneEntity(id: string): Promise<ProductVariant> {
-    const productVariant = await this.productVariantRepository.findOneBy({ id });
+    const productVariant = await this.productVariantRepository.findOneBy({
+      id,
+    });
 
     if (!productVariant) {
-      throw new NotFoundException(
-        `Product variant with id ${id} not found`,
-      );
+      throw new NotFoundException(`Product variant with id ${id} not found`);
     }
 
     return productVariant;
@@ -305,10 +299,9 @@ export class ProductVariantsService {
   }
 
   private mapVariantImageUrls(variant: ProductVariant): ProductVariant {
-    const baseUrl = (this.configService.get<string>('url_base_BE') || '').replace(
-      /\/$/,
-      '',
-    );
+    const baseUrl = (
+      this.configService.get<string>('url_base_BE') || ''
+    ).replace(/\/$/, '');
 
     if (!variant.productVariantMappings?.length || !baseUrl) {
       return variant;

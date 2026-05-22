@@ -30,9 +30,7 @@ export class WishlistsService {
     });
 
     if (!wishlist) {
-      throw new NotFoundException(
-        `Wishlist with id ${id} not found`,
-      );
+      throw new NotFoundException(`Wishlist with id ${id} not found`);
     }
 
     return wishlist;
