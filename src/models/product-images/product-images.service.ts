@@ -63,19 +63,16 @@ export class ProductImagesService {
     const productImage = await this.productImageRepository.findOneBy({ id });
 
     if (!productImage) {
-      throw new NotFoundException(
-        `Product image with id ${id} not found`,
-      );
+      throw new NotFoundException(`Product image with id ${id} not found`);
     }
 
     return productImage;
   }
 
   private toPublicImageUrl(productImage: ProductImage): ProductImage {
-    const baseUrl = (this.configService.get<string>('url_base_BE') || '').replace(
-      /\/$/,
-      '',
-    );
+    const baseUrl = (
+      this.configService.get<string>('url_base_BE') || ''
+    ).replace(/\/$/, '');
 
     if (!baseUrl || /^https?:\/\//i.test(productImage.imageUrl)) {
       return productImage;
@@ -94,9 +91,7 @@ export class ProductImagesService {
     const productImage = await this.findOneEntity(id);
 
     if ('status' in updateProductImageDto) {
-      throw new BadRequestException(
-        'Status cannot be updated in this API',
-      );
+      throw new BadRequestException('Status cannot be updated in this API');
     }
 
     this.productImageRepository.merge(productImage, updateProductImageDto);

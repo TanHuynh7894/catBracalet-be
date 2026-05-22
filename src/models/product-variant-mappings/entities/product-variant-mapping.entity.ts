@@ -26,10 +26,14 @@ export class ProductVariantMapping {
   @JoinColumn({ name: 'product_id', referencedColumnName: 'id' })
   product: Product;
 
-  @ManyToOne(() => ProductVariant, (variant) => variant.productVariantMappings, {
-    onDelete: 'CASCADE',
-    nullable: false,
-  })
+  @ManyToOne(
+    () => ProductVariant,
+    (variant) => variant.productVariantMappings,
+    {
+      onDelete: 'CASCADE',
+      nullable: false,
+    },
+  )
   @JoinColumn({ name: 'variant_id', referencedColumnName: 'id' })
   variant: ProductVariant;
 

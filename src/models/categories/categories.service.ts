@@ -2,10 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
 
-import {
-  CategoryStatus,
-  CreateCategoryDto,
-} from './dto/create-category.dto';
+import { CategoryStatus, CreateCategoryDto } from './dto/create-category.dto';
 
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { Category } from './entities/category.entity';
@@ -17,9 +14,7 @@ export class CategoriesService {
     private readonly categoryRepository: Repository<Category>,
   ) {}
 
-  async create(
-    createCategoryDto: CreateCategoryDto,
-  ): Promise<Category> {
+  async create(createCategoryDto: CreateCategoryDto): Promise<Category> {
     const newCategory = this.categoryRepository.create({
       ...createCategoryDto,
       status: CategoryStatus.ACTIVE,
@@ -53,9 +48,7 @@ export class CategoriesService {
     const category = await this.categoryRepository.findOneBy({ id });
 
     if (!category) {
-      throw new NotFoundException(
-        `Category with id ${id} not found`,
-      );
+      throw new NotFoundException(`Category with id ${id} not found`);
     }
 
     return category;

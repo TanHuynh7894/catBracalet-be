@@ -1,4 +1,5 @@
 ﻿import { ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsString } from 'class-validator';
 
 export class LogoutDto {
   @ApiProperty({
@@ -6,5 +7,7 @@ export class LogoutDto {
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIxMjM0NTY3ODkwIiwiaWF0IjoxNTE2MjM5MDIyfQ.TJVA95OrM7E2cBab30RMHrHDcEfxjoYZgeFONFh7HgQ',
     description: 'Refresh token cần hủy',
   })
+  @IsNotEmpty({ message: 'Refresh token không được để trống' })
+  @IsString({ message: 'Refresh token phải là chuỗi ký tự' })
   refreshToken: string;
 }

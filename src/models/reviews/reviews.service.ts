@@ -5,10 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import {
-  CreateReviewDto,
-  ReviewStatus,
-} from './dto/create-review.dto';
+import { CreateReviewDto, ReviewStatus } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
 import { Review } from './entities/review.entity';
 
@@ -47,16 +44,11 @@ export class ReviewsService {
     return review;
   }
 
-  async update(
-    id: string,
-    updateReviewDto: UpdateReviewDto,
-  ): Promise<Review> {
+  async update(id: string, updateReviewDto: UpdateReviewDto): Promise<Review> {
     const review = await this.findOne(id);
 
     if ((updateReviewDto as any).status) {
-      throw new BadRequestException(
-        'Status cannot be updated in this API',
-      );
+      throw new BadRequestException('Status cannot be updated in this API');
     }
 
     this.reviewRepository.merge(review, updateReviewDto);
