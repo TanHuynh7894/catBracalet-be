@@ -5,7 +5,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -19,6 +18,7 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LogoutDto } from './dto/logout.dto';
 import { User } from './entities/user.entity';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 import { OtpService } from './services/otp.service';
 import { JwtTokenService } from './services/jwt-token.service';
@@ -37,7 +37,6 @@ interface JwtPayload {
 
 import { Role } from '../role/entities/role.entity';
 
-
 @Injectable()
 export class UserService {
   constructor(
@@ -48,7 +47,7 @@ export class UserService {
 
     @InjectRepository(Role)
     private readonly roleRepository: Repository<Role>,
-  ) { }
+  ) {}
 
   /**
    * Bước 1: Đăng ký người dùng - lưu tạm thời, gửi OTP
@@ -89,7 +88,7 @@ export class UserService {
    */
   async verifyOtp(
     verifyOtpDto: VerifyOtpDto,
-  ): Promise<{ message: string; user: User }> {
+  ): Promise<{ message: string; user: Omit<User, 'password'> }> {
     const { email, otp } = verifyOtpDto;
 
     const pendingUser = this.otpService.verifyOtp(
@@ -100,20 +99,29 @@ export class UserService {
       throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn');
     }
 
+    // Tìm role 'CUSTOMER' từ bảng roles theo cột role_name
+    const customerRole = await this.roleRepository.findOne({
+      where: { name: 'CUSTOMER', status: 'ACTIVE' },
+    });
+
     const newUser = this.userRepository.create({
       email: pendingUser.email,
       fullName: pendingUser.fullName,
       password: pendingUser.password,
       phone: pendingUser.phone,
       status: 'ACTIVE',
+      roles: customerRole ? [customerRole] : [],
     });
 
     const savedUser = await this.userRepository.save(newUser);
     this.otpService.removePendingUser(email);
 
+    // Loại bỏ password trước khi trả về
+    const { password: _, ...userWithoutPassword } = savedUser;
+
     return {
       message: 'Xác thực OTP thành công. Tài khoản đã được kích hoạt!',
-      user: savedUser,
+      user: userWithoutPassword,
     };
   }
 
@@ -128,9 +136,9 @@ export class UserService {
   }> {
     const { email, password } = loginUserDto;
 
+    // Lấy user mà không load relations
     const user = await this.userRepository.findOne({
       where: { email },
-      relations: ['roles'],
     });
     if (!user) {
       throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
@@ -163,8 +171,15 @@ export class UserService {
       refreshTokenExpiresAt,
     );
 
+    // Lấy roles sử dụng query builder để chỉ lấy roles hợp lệ (có name không null)
+    const userWithRoles = await this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.roles', 'role', 'role.name IS NOT NULL')
+      .where('user.id = :userId', { userId: user.id })
+      .getOne();
+
     // Tạo object mới không chứa password
-    const userResponse = {
+    const userResponse: Omit<User, 'password'> = {
       id: user.id,
       vipLevelId: user.vipLevelId,
       fullName: user.fullName,
@@ -175,7 +190,7 @@ export class UserService {
       totalSpending: user.totalSpending,
       vipUpdatedAt: user.vipUpdatedAt,
       createdAt: user.createdAt,
-      roles: user.roles,
+      roles: userWithRoles?.roles || [],
     };
 
     return {
@@ -357,10 +372,12 @@ export class UserService {
     return this.userRepository.update(id, updateUserDto);
   }
 
-
   async addRoleToUser(userId: string, roleId: string): Promise<User> {
     const user = await this.findOne(userId);
-    const role = await this.roleRepository.findOneBy({ id: roleId, status: 'ACTIVE' });
+    const role = await this.roleRepository.findOneBy({
+      id: roleId,
+      status: 'ACTIVE',
+    });
     if (!role) {
       throw new NotFoundException(`Active Role with id ${roleId} not found`);
     }
@@ -381,8 +398,55 @@ export class UserService {
     return user;
   }
 
+  async getProfile(id: string): Promise<Omit<User, 'password' | 'roles'>> {
+    const user = await this.findOne(id);
+    const { password, ...result } = user;
+    return result;
+  }
+
+  async updateProfile(
+    id: string,
+    updateDto: UpdateUserDto,
+  ): Promise<Omit<User, 'password'>> {
+    const user = await this.findOne(id);
+
+    // Chỉ cho phép cập nhật 1 số trường
+    if (updateDto.fullName) user.fullName = updateDto.fullName;
+    if (updateDto.phone) user.phone = updateDto.phone;
+    if (updateDto.avatar) user.avatar = updateDto.avatar;
+
+    const updatedUser = await this.userRepository.save(user);
+    const { password: _, ...result } = updatedUser;
+    return result;
+  }
+
+  async changePassword(
+    id: string,
+    changePasswordDto: ChangePasswordDto,
+  ): Promise<{ message: string }> {
+    const { oldPassword, newPassword } = changePasswordDto;
+
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException('Người dùng không tồn tại');
+    }
+
+    const isPasswordValid = await bcrypt.compare(oldPassword, user.password);
+    if (!isPasswordValid) {
+      throw new BadRequestException('Mật khẩu hiện tại không chính xác');
+    }
+
+    if (newPassword.length < 6) {
+      throw new BadRequestException('Mật khẩu mới phải có ít nhất 6 ký tự');
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await this.userRepository.save(user);
+
+    return { message: 'Đổi mật khẩu thành công' };
+  }
+
   remove(id: string) {
     return this.userRepository.delete(id);
   }
 }
-

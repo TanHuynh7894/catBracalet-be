@@ -1,5 +1,11 @@
-
-import { Column, CreateDateColumn, Entity, ManyToMany, JoinTable, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  ManyToMany,
+  JoinTable,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { Role } from '../../role/entities/role.entity';
 
 @Entity('users')
@@ -51,4 +57,3 @@ export class User {
   })
   roles: Role[];
 }
-

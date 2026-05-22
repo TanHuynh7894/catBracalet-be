@@ -2,7 +2,8 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class RemoveRoleDto {
   @ApiProperty({
-    description: 'Trạng thái mới của role sau khi xóa mềm (mặc định là INACTIVE)',
+    description:
+      'New status of the role after soft delete (default is INACTIVE)',
     example: 'INACTIVE',
     enum: ['ACTIVE', 'INACTIVE'],
     default: 'INACTIVE',
