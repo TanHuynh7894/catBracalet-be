@@ -3,11 +3,20 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { CategoriesModule } from './models/categories/categories.module';
+import { MaterialsModule } from './models/materials/materials.module';
+import { ProductImagesModule } from './models/product-images/product-images.module';
+import { ProductVariantMappingsModule } from './models/product-variant-mappings/product-variant-mappings.module';
+import { ProductVariantsModule } from './models/product-variants/product-variants.module';
+import { ProductsModule } from './models/products/products.module';
+import { ReviewsModule } from './models/reviews/reviews.module';
 import { RoleModule } from './models/role/role.module';
 import { UserModule } from './models/user/user.module';
+import { WishlistsModule } from './models/wishlists/wishlists.module';
 import { UserAddressModule } from './models/user_address/user_address.module';
 import { VouchersModule } from './models/vouchers/vouchers.module';
 import { PaymentsModule } from './models/payments/payments.module';
+import { VipModule } from './models/VIP/vip.module';
 
 @Module({
   imports: [
@@ -38,11 +47,19 @@ import { PaymentsModule } from './models/payments/payments.module';
         };
       },
     }),
+    CategoriesModule,
+    MaterialsModule,
+    ProductImagesModule,
+    ProductVariantMappingsModule,
+    ProductVariantsModule,
+    ProductsModule,
+    ReviewsModule,
     RoleModule,
     UserModule,
     UserAddressModule,
     VouchersModule,
     PaymentsModule,
+    VipModule,
   ],
   controllers: [AppController],
   providers: [AppService],

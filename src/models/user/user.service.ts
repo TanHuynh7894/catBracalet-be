@@ -139,6 +139,7 @@ export class UserService {
     // Lấy user mà không load relations
     const user = await this.userRepository.findOne({
       where: { email },
+      relations: ['roles', 'vipLevel'],
     });
     if (!user) {
       throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
@@ -191,6 +192,7 @@ export class UserService {
       vipUpdatedAt: user.vipUpdatedAt,
       createdAt: user.createdAt,
       roles: userWithRoles?.roles || [],
+      vipLevel: user.vipLevel,
     };
 
     return {
@@ -360,7 +362,7 @@ export class UserService {
   async findOne(id: string) {
     const user = await this.userRepository.findOne({
       where: { id },
-      relations: ['roles'],
+      relations: ['roles', 'vipLevel'],
     });
     if (!user) {
       throw new NotFoundException(`User with id ${id} not found`);
