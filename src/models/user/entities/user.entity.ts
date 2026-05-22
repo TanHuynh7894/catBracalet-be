@@ -54,6 +54,16 @@ export class User {
   @Column({ type: 'timestamp', name: 'vip_updated_at', nullable: true })
   vipUpdatedAt: Date;
 
+  @Column({ type: 'text', name: 'refresh_token', nullable: true })
+  refreshToken: string | null;
+
+  @Column({
+    type: 'timestamp',
+    name: 'refresh_token_expires_at',
+    nullable: true,
+  })
+  refreshTokenExpiresAt: Date | null;
+
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;
 

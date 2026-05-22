@@ -12,7 +12,7 @@ interface JwtPayload {
 @Injectable()
 export class JwtTokenService {
   private readonly accessTokenExpiration = '15m';
-  private readonly refreshTokenExpiration = '7d';
+  private readonly refreshTokenExpiration = '24h';
 
   constructor(
     private jwtService: JwtService,
@@ -62,17 +62,26 @@ export class JwtTokenService {
    */
   verifyAccessToken(token: string): JwtPayload | null {
     try {
+      console.log('[JWT.TOKEN_SERVICE] Verifying access token');
       // Ép kiểu đầu ra từ 'any' về 'unknown' để dập tắt hoàn toàn lỗi Unsafe assignment
       const decoded = this.jwtService.verify(token, {
         secret: this.configService.get<string>('JWT_SECRET'),
       }) as unknown;
 
       if (this.isJwtPayload(decoded)) {
+        console.log('[JWT.TOKEN_SERVICE] Access token verified:', {
+          userId: decoded.userId,
+          email: decoded.email,
+        });
         return decoded;
       }
 
+      console.warn('[JWT.TOKEN_SERVICE] Access token payload invalid');
       return null;
-    } catch {
+    } catch (error) {
+      console.error('[JWT.TOKEN_SERVICE] Access token verification failed:', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       return null;
     }
   }
@@ -82,17 +91,26 @@ export class JwtTokenService {
    */
   verifyRefreshToken(token: string): JwtPayload | null {
     try {
+      console.log('[JWT.TOKEN_SERVICE] Verifying refresh token');
       // Ép kiểu đầu ra từ 'any' về 'unknown' để dập tắt hoàn toàn lỗi Unsafe assignment
       const decoded = this.jwtService.verify(token, {
         secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
       }) as unknown;
 
       if (this.isJwtPayload(decoded)) {
+        console.log('[JWT.TOKEN_SERVICE] Refresh token verified:', {
+          userId: decoded.userId,
+          email: decoded.email,
+        });
         return decoded;
       }
 
+      console.warn('[JWT.TOKEN_SERVICE] Refresh token payload invalid');
       return null;
-    } catch {
+    } catch (error) {
+      console.error('[JWT.TOKEN_SERVICE] Refresh token verification failed:', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       return null;
     }
   }

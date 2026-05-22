@@ -117,6 +117,7 @@ export class UserService {
     this.otpService.removePendingUser(email);
 
     // Loại bỏ password trước khi trả về
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password: _, ...userWithoutPassword } = savedUser;
 
     return {
@@ -128,79 +129,119 @@ export class UserService {
   /**
    * Bước 3: Đăng nhập - trả về cặp Access + Refresh Token
    */
+  /**
+   * Bước 3: Đăng nhập - trả về cặp Access + Refresh Token
+   */
   async loginUser(loginUserDto: LoginUserDto): Promise<{
     message: string;
     user: Omit<User, 'password'>;
     accessToken: string;
     refreshToken: string;
   }> {
-    const { email, password } = loginUserDto;
+    try {
+      const { email, password } = loginUserDto;
 
-    // Lấy user mà không load relations
-    const user = await this.userRepository.findOne({
-      where: { email },
-      relations: ['roles', 'vipLevel'],
-    });
-    if (!user) {
-      throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
+      console.log('[LOGIN] Starting login process:', { email });
+
+      // Lấy user mà không load relations
+      const user = await this.userRepository.findOne({
+        where: { email },
+        relations: ['roles', 'vipLevel'],
+      });
+
+      if (!user) {
+        console.warn('[LOGIN] User not found:', { email });
+        throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
+      }
+
+      console.log('[LOGIN] User found:', { userId: user.id, email: user.email });
+
+      if (user.status !== 'ACTIVE') {
+        console.warn('[LOGIN] Account not active:', {
+          userId: user.id,
+          status: user.status,
+        });
+        throw new UnauthorizedException('Tài khoản của bạn không hoạt động');
+      }
+
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+        console.warn('[LOGIN] Password mismatch:', { email });
+        throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
+      }
+
+      console.log('[LOGIN] Password verified, generating tokens:', {
+        userId: user.id,
+      });
+
+      const accessToken = this.jwtTokenService.generateAccessToken(
+        user.id,
+        user.email,
+      );
+      const refreshToken = this.jwtTokenService.generateRefreshToken(
+        user.id,
+        user.email,
+      );
+
+      console.log('[LOGIN] Tokens generated:', {
+        accessTokenLength: accessToken.length,
+        refreshTokenLength: refreshToken.length,
+      });
+
+      // Lưu Refresh Token vào User entity với thời hạn 24 giờ
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 giờ
+      await this.userRepository.update(
+        { id: user.id },
+        {
+          refreshToken,
+          refreshTokenExpiresAt: expiresAt,
+        },
+      );
+
+      console.log('[LOGIN] Refresh token saved to DB:', {
+        userId: user.id,
+        expiresAt,
+      });
+
+      // Lấy roles sử dụng query builder để chỉ lấy roles hợp lệ (có name không null)
+      const userWithRoles = await this.userRepository
+        .createQueryBuilder('user')
+        .leftJoinAndSelect('user.roles', 'role', 'role.name IS NOT NULL')
+        .where('user.id = :userId', { userId: user.id })
+        .getOne();
+
+      const userResponse: Omit<User, 'password'> = {
+        id: user.id,
+        vipLevelId: user.vipLevelId,
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        avatar: user.avatar,
+        status: user.status,
+        totalSpending: user.totalSpending,
+        vipUpdatedAt: user.vipUpdatedAt,
+        createdAt: user.createdAt,
+        roles: userWithRoles?.roles || [],
+        vipLevel: user.vipLevel,
+        refreshToken: undefined,
+        refreshTokenExpiresAt: undefined,
+      };
+
+      console.log('[LOGIN] Login successful for user:', user.id);
+
+      return {
+        message: 'Đăng nhập thành công',
+        user: userResponse,
+        accessToken,
+        refreshToken,
+      };
+    } catch (error) {
+      console.error('[LOGIN] Error during login:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      throw error;
     }
-
-    if (user.status !== 'ACTIVE') {
-      throw new UnauthorizedException('Tài khoản của bạn không hoạt động');
-    }
-
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
-    }
-
-    const accessToken = this.jwtTokenService.generateAccessToken(
-      user.id,
-      user.email,
-    );
-    const refreshToken = this.jwtTokenService.generateRefreshToken(
-      user.id,
-      user.email,
-    );
-
-    const refreshTokenExpiresAt = new Date(
-      Date.now() + 7 * 24 * 60 * 60 * 1000,
-    );
-    this.otpService.saveRefreshToken(
-      refreshToken,
-      user.id,
-      refreshTokenExpiresAt,
-    );
-
-    // Lấy roles sử dụng query builder để chỉ lấy roles hợp lệ (có name không null)
-    const userWithRoles = await this.userRepository
-      .createQueryBuilder('user')
-      .leftJoinAndSelect('user.roles', 'role', 'role.name IS NOT NULL')
-      .where('user.id = :userId', { userId: user.id })
-      .getOne();
-
-    // Tạo object mới không chứa password
-    const userResponse: Omit<User, 'password'> = {
-      id: user.id,
-      vipLevelId: user.vipLevelId,
-      fullName: user.fullName,
-      email: user.email,
-      phone: user.phone,
-      avatar: user.avatar,
-      status: user.status,
-      totalSpending: user.totalSpending,
-      vipUpdatedAt: user.vipUpdatedAt,
-      createdAt: user.createdAt,
-      roles: userWithRoles?.roles || [],
-      vipLevel: user.vipLevel,
-    };
-
-    return {
-      message: 'Đăng nhập thành công',
-      user: userResponse,
-      accessToken,
-      refreshToken,
-    };
   }
 
   /**
@@ -209,80 +250,230 @@ export class UserService {
   async refreshToken(
     refreshTokenDto: RefreshTokenDto,
   ): Promise<{ accessToken: string; refreshToken: string }> {
-    const { refreshToken } = refreshTokenDto;
+    try {
+      const { refreshToken } = refreshTokenDto;
 
-    const jwtPayload = this.jwtTokenService.verifyRefreshToken(
-      refreshToken,
-    ) as JwtPayload | null;
-    if (!jwtPayload) {
-      throw new UnauthorizedException(
-        'Refresh token không hợp lệ hoặc đã hết hạn',
+      console.log('[REFRESH_TOKEN] Starting token refresh:', {
+        tokenLength: refreshToken.length,
+        tokenStart: refreshToken.substring(0, 20) + '...',
+      });
+
+      const jwtPayload = this.jwtTokenService.verifyRefreshToken(
+        refreshToken,
+      ) as JwtPayload | null;
+
+      console.log('[REFRESH_TOKEN] JWT verification result:', {
+        isValid: !!jwtPayload,
+        userId: jwtPayload?.userId,
+        email: jwtPayload?.email,
+      });
+
+      if (!jwtPayload) {
+        console.warn('[REFRESH_TOKEN] JWT verification failed');
+        throw new UnauthorizedException(
+          'Refresh token không hợp lệ hoặc đã hết hạn',
+        );
+      }
+
+      // Lấy user và kiểm tra token từ database
+      const user = await this.userRepository.findOne({
+        where: { id: jwtPayload.userId },
+      });
+
+      console.log('[REFRESH_TOKEN] User lookup result:', {
+        found: !!user,
+        userId: user?.id,
+        status: user?.status,
+      });
+
+      if (!user || user.status !== 'ACTIVE') {
+        console.warn('[REFRESH_TOKEN] User not found or inactive:', {
+          userId: jwtPayload.userId,
+          found: !!user,
+          status: user?.status,
+        });
+        throw new UnauthorizedException('Tài khoản không hoạt động');
+      }
+
+      // Kiểm tra token có trùng khớp không
+      console.log('[REFRESH_TOKEN] Token DB match check:', {
+        tokenInDb: user.refreshToken?.substring(0, 20) + '...' || 'null',
+        tokenProvided: refreshToken.substring(0, 20) + '...',
+        match: user.refreshToken === refreshToken,
+      });
+
+      if (user.refreshToken !== refreshToken) {
+        console.warn('[REFRESH_TOKEN] Token mismatch in DB');
+        throw new UnauthorizedException(
+          'Refresh token không hợp lệ hoặc không khớp',
+        );
+      }
+
+      // Kiểm tra token đã hết hạn chưa
+      console.log('[REFRESH_TOKEN] Token expiration check:', {
+        expiresAt: user.refreshTokenExpiresAt,
+        now: new Date(),
+        expired: !user.refreshTokenExpiresAt || new Date() > user.refreshTokenExpiresAt,
+      });
+
+      if (
+        !user.refreshTokenExpiresAt ||
+        new Date() > user.refreshTokenExpiresAt
+      ) {
+        console.warn('[REFRESH_TOKEN] Token has expired');
+        throw new UnauthorizedException('Refresh token đã hết hạn');
+      }
+
+      const newAccessToken = this.jwtTokenService.generateAccessToken(
+        user.id,
+        user.email,
       );
-    }
 
-    const tokenData = this.otpService.getRefreshTokenData(refreshToken);
-    if (!tokenData) {
-      throw new UnauthorizedException(
-        'Refresh token không tồn tại hoặc đã hết hạn',
+      const newRefreshToken = this.jwtTokenService.generateRefreshToken(
+        user.id,
+        user.email,
       );
+
+      // Lưu token mới vào DB
+      const newExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 giờ
+      await this.userRepository.update(
+        { id: user.id },
+        {
+          refreshToken: newRefreshToken,
+          refreshTokenExpiresAt: newExpiresAt,
+        },
+      );
+
+      console.log('[REFRESH_TOKEN] Token refresh successful for user:', user.id);
+
+      return {
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+      };
+    } catch (error) {
+      console.error('[REFRESH_TOKEN] Error during token refresh:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      throw error;
     }
-
-    const user = await this.userRepository.findOne({
-      where: { id: jwtPayload.userId },
-    });
-    if (!user || user.status !== 'ACTIVE') {
-      throw new UnauthorizedException('Tài khoản không hoạt động');
-    }
-
-    const newAccessToken = this.jwtTokenService.generateAccessToken(
-      user.id,
-      user.email,
-    );
-
-    const newRefreshToken = this.jwtTokenService.generateRefreshToken(
-      user.id,
-      user.email,
-    );
-
-    this.otpService.removeRefreshToken(refreshToken);
-    const newRefreshTokenExpiresAt = new Date(
-      Date.now() + 7 * 24 * 60 * 60 * 1000,
-    );
-    this.otpService.saveRefreshToken(
-      newRefreshToken,
-      user.id,
-      newRefreshTokenExpiresAt,
-    );
-
-    return {
-      accessToken: newAccessToken,
-      refreshToken: newRefreshToken,
-    };
   }
 
   /**
    * Bước 5: Logout - hủy Refresh Token
+   * @param logoutDto - Chứa refreshToken từ body
+   * @param userId - ID của user từ JWT payload trong request (từ @CurrentUser decorator)
    */
-  logoutUser(logoutDto: LogoutDto): { message: string } {
-    const { refreshToken } = logoutDto;
+  async logoutUser(
+    logoutDto: LogoutDto,
+    userId: string,
+  ): Promise<{ message: string }> {
+    try {
+      const { refreshToken } = logoutDto;
 
-    const jwtPayload = this.jwtTokenService.verifyRefreshToken(
-      refreshToken,
-    ) as JwtPayload | null;
-    if (!jwtPayload) {
-      throw new UnauthorizedException('Refresh token không hợp lệ');
+      console.log('[LOGOUT] Starting logout process:', {
+        userId,
+        refreshTokenProvided: !!refreshToken,
+        refreshTokenLength: refreshToken?.length || 0,
+      });
+
+      if (!refreshToken) {
+        console.error('[LOGOUT] No refresh token provided in request body');
+        throw new BadRequestException('Refresh token không được để trống');
+      }
+
+      const jwtPayload = this.jwtTokenService.verifyRefreshToken(
+        refreshToken,
+      ) as JwtPayload | null;
+
+      console.log('[LOGOUT] Token verification result:', {
+        isValid: !!jwtPayload,
+        payloadUserId: jwtPayload?.userId,
+        payloadEmail: jwtPayload?.email,
+      });
+
+      if (!jwtPayload) {
+        console.warn('[LOGOUT] Refresh token verification failed:', {
+          userId,
+          token: refreshToken.substring(0, 20) + '...',
+        });
+        throw new UnauthorizedException('Refresh token không hợp lệ');
+      }
+
+      console.log('[LOGOUT] Token payload extracted:', {
+        payloadUserId: jwtPayload.userId,
+        currentUserId: userId,
+        match: jwtPayload.userId === userId,
+      });
+
+      if (jwtPayload.userId !== userId) {
+        console.warn('[LOGOUT] User ID mismatch:', {
+          tokenUserId: jwtPayload.userId,
+          currentUserId: userId,
+        });
+        throw new UnauthorizedException(
+          'Refresh token không khớp với user hiện tại',
+        );
+      }
+
+      // Lấy user để kiểm tra token trong DB trước khi logout
+      const user = await this.userRepository.findOne({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        console.error('[LOGOUT] User not found:', { userId });
+        throw new UnauthorizedException('User không tồn tại');
+      }
+
+      console.log('[LOGOUT] User found, checking token in DB:', {
+        userId,
+        tokenInDbExists: !!user.refreshToken,
+        tokenInDbMatches: user.refreshToken === refreshToken,
+      });
+
+      if (user.refreshToken !== refreshToken) {
+        console.warn('[LOGOUT] Token mismatch in DB:', {
+          userId,
+          tokenInDb: user.refreshToken?.substring(0, 20) + '...' || 'null',
+          tokenProvided: refreshToken.substring(0, 20) + '...',
+        });
+        throw new UnauthorizedException(
+          'Refresh token không khớp với token trong DB',
+        );
+      }
+
+      console.log('[LOGOUT] All checks passed, updating user record:', {
+        userId,
+      });
+
+      const result = await this.userRepository.update(
+        { id: userId },
+        {
+          refreshToken: null,
+          refreshTokenExpiresAt: null,
+        },
+      );
+
+      console.log('[LOGOUT] Update result:', {
+        userId,
+        affected: result.affected,
+        raw: result.raw,
+      });
+
+      console.log('[LOGOUT] Logout successful for user:', userId);
+
+      return {
+        message: 'Đăng xuất thành công',
+      };
+    } catch (error) {
+      console.error('[LOGOUT] Error during logout:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        userId,
+      });
+      throw error;
     }
-
-    const tokenData = this.otpService.getRefreshTokenData(refreshToken);
-    if (!tokenData) {
-      throw new UnauthorizedException('Refresh token không tồn tại');
-    }
-
-    this.otpService.removeRefreshToken(refreshToken);
-
-    return {
-      message: 'Đăng xuất thành công',
-    };
   }
 
   // ========== LUỒNG RESET PASSWORD ==========
@@ -402,6 +593,7 @@ export class UserService {
 
   async getProfile(id: string): Promise<Omit<User, 'password' | 'roles'>> {
     const user = await this.findOne(id);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...result } = user;
     return result;
   }
@@ -418,6 +610,7 @@ export class UserService {
     if (updateDto.avatar) user.avatar = updateDto.avatar;
 
     const updatedUser = await this.userRepository.save(user);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password: _, ...result } = updatedUser;
     return result;
   }

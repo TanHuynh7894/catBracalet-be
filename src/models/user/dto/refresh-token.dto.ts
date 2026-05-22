@@ -1,5 +1,5 @@
 ﻿import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsString, IsJWT, Length } from 'class-validator';
 
 export class RefreshTokenDto {
   @ApiProperty({
@@ -9,5 +9,7 @@ export class RefreshTokenDto {
   })
   @IsNotEmpty({ message: 'Refresh token không được để trống' })
   @IsString({ message: 'Refresh token phải là chuỗi ký tự' })
+  @Length(10, 1000, { message: 'Refresh token không hợp lệ' })
+  @IsJWT({ message: 'Refresh token phải là JWT token hợp lệ' })
   refreshToken: string;
 }
