@@ -12,16 +12,17 @@ import { ProductsModule } from './models/products/products.module';
 import { ReviewsModule } from './models/reviews/reviews.module';
 import { RoleModule } from './models/role/role.module';
 import { UserModule } from './models/user/user.module';
-import { WishlistsModule } from './models/wishlists/wishlists.module';
 import { UserAddressModule } from './models/user_address/user_address.module';
 import { VouchersModule } from './models/vouchers/vouchers.module';
 import { PaymentsModule } from './models/payments/payments.module';
 import { VipModule } from './models/VIP/vip.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
-      isGlobal: true, // ✅ Đảm bảo ConfigModule là global
+      isGlobal: true,
+      envFilePath: '.env',
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -33,6 +34,14 @@ import { VipModule } from './models/VIP/vip.module';
         console.log('Username:', configService.get<string>('user_DB'));
         console.log('Password:', configService.get<string>('password_DB'));
         console.log('Database:', configService.get<string>('name_DB'));
+        console.log('------------------------------');
+
+        console.log('--- MAIL CONFIGURATION ---');
+        console.log('MAIL_HOST:', configService.get<string>('MAIL_HOST'));
+        console.log('MAIL_PORT:', configService.get<string>('MAIL_PORT'));
+        console.log('MAIL_USER:', configService.get<string>('MAIL_USER'));
+        console.log('MAIL_FROM:', configService.get<string>('MAIL_FROM'));
+        console.log('MAIL_SECURE:', configService.get<string>('MAIL_SECURE'));
         console.log('------------------------------');
 
         return {
@@ -47,6 +56,7 @@ import { VipModule } from './models/VIP/vip.module';
         };
       },
     }),
+    AuthModule,
     CategoriesModule,
     MaterialsModule,
     ProductImagesModule,
