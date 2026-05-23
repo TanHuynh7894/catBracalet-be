@@ -8,7 +8,6 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-
 import { Role } from '../../role/entities/role.entity';
 import { VipLevel } from '../../VIP/entities/vip-level.entity';
 
@@ -53,6 +52,21 @@ export class User {
 
   @Column({ type: 'timestamp', name: 'vip_updated_at', nullable: true })
   vipUpdatedAt: Date;
+
+  @Column({
+    type: 'varchar',
+    length: 64,
+    name: 'refresh_token',
+    nullable: true,
+  })
+  refreshToken: string | null;
+
+  @Column({
+    type: 'timestamp',
+    name: 'refresh_token_expires_at',
+    nullable: true,
+  })
+  refreshTokenExpiresAt: Date | null;
 
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;

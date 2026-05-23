@@ -23,18 +23,6 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { OtpService } from './services/otp.service';
 import { JwtTokenService } from './services/jwt-token.service';
 
-interface PendingUserData {
-  email: string;
-  fullName: string;
-  password: string;
-  phone?: string;
-}
-
-interface JwtPayload {
-  userId: string;
-  email: string;
-}
-
 import { Role } from '../role/entities/role.entity';
 
 @Injectable()
@@ -75,7 +63,14 @@ export class UserService {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    this.otpService.savePendingUser(email, fullName, hashedPassword, phone);
+
+    // Đã đồng bộ chữ async ở OtpService nên gọi await chuẩn cấu trúc bất đồng bộ
+    await this.otpService.savePendingUser(
+      email,
+      fullName,
+      hashedPassword,
+      phone,
+    );
 
     return {
       message: 'Đăng ký thành công. Vui lòng kiểm tra email để xác thực OTP.',
@@ -91,10 +86,7 @@ export class UserService {
   ): Promise<{ message: string; user: Omit<User, 'password'> }> {
     const { email, otp } = verifyOtpDto;
 
-    const pendingUser = this.otpService.verifyOtp(
-      email,
-      otp,
-    ) as PendingUserData | null;
+    const pendingUser = this.otpService.verifyOtp(email, otp);
     if (!pendingUser) {
       throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn');
     }
@@ -117,6 +109,7 @@ export class UserService {
     this.otpService.removePendingUser(email);
 
     // Loại bỏ password trước khi trả về
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password: _, ...userWithoutPassword } = savedUser;
 
     return {
@@ -134,155 +127,265 @@ export class UserService {
     accessToken: string;
     refreshToken: string;
   }> {
-    const { email, password } = loginUserDto;
+    try {
+      const { email, password } = loginUserDto;
 
-    // Lấy user mà không load relations
-    const user = await this.userRepository.findOne({
-      where: { email },
-      relations: ['roles', 'vipLevel'],
-    });
-    if (!user) {
-      throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
+      console.log('[LOGIN] Starting login process:', { email });
+
+      // Lấy user kèm theo relations để xử lý thông tin phản hồi công khai
+      const user = await this.userRepository.findOne({
+        where: { email },
+        relations: ['roles', 'vipLevel'],
+      });
+
+      if (!user) {
+        console.warn('[LOGIN] User not found:', { email });
+        throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
+      }
+
+      console.log('[LOGIN] User found:', {
+        userId: user.id,
+        email: user.email,
+      });
+
+      if (user.status !== 'ACTIVE') {
+        console.warn('[LOGIN] Account not active:', {
+          userId: user.id,
+          status: user.status,
+        });
+        throw new UnauthorizedException('Tài khoản của bạn không hoạt động');
+      }
+
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+        console.warn('[LOGIN] Password mismatch:', { email });
+        throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
+      }
+
+      console.log('[LOGIN] Password verified, generating tokens:', {
+        userId: user.id,
+      });
+
+      const accessToken = this.jwtTokenService.generateAccessToken(
+        user.id,
+        user.email,
+      );
+
+      const refreshToken = this.jwtTokenService.generateRefreshToken();
+
+      console.log('[LOGIN] Tokens generated:', {
+        accessTokenLength: accessToken.length,
+        refreshTokenLength: refreshToken.length,
+      });
+
+      // Lưu Refresh Token vào User entity với thời hạn 24 giờ
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 giờ
+      await this.userRepository.update(
+        { id: user.id },
+        {
+          refreshToken,
+          refreshTokenExpiresAt: expiresAt,
+        },
+      );
+
+      console.log('[LOGIN] Refresh token saved to DB:', {
+        userId: user.id,
+        expiresAt,
+      });
+
+      // Lấy roles sử dụng query builder để chỉ lấy roles hợp lệ (có name không null)
+      const userWithRoles = await this.userRepository
+        .createQueryBuilder('user')
+        .leftJoinAndSelect('user.roles', 'role', 'role.name IS NOT NULL')
+        .where('user.id = :userId', { userId: user.id })
+        .getOne();
+
+      const userResponse: Omit<User, 'password'> = {
+        id: user.id,
+        vipLevelId: user.vipLevelId,
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        avatar: user.avatar,
+        status: user.status,
+        totalSpending: user.totalSpending,
+        vipUpdatedAt: user.vipUpdatedAt,
+        createdAt: user.createdAt,
+        roles: userWithRoles?.roles || [],
+        vipLevel: user.vipLevel,
+        refreshToken: undefined,
+        refreshTokenExpiresAt: undefined,
+      };
+
+      console.log('[LOGIN] Login successful for user:', user.id);
+
+      return {
+        message: 'Đăng nhập thành công',
+        user: userResponse,
+        accessToken,
+        refreshToken,
+      };
+    } catch (error) {
+      console.error('[LOGIN] Error during login:', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      throw error;
     }
-
-    if (user.status !== 'ACTIVE') {
-      throw new UnauthorizedException('Tài khoản của bạn không hoạt động');
-    }
-
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
-    }
-
-    const accessToken = this.jwtTokenService.generateAccessToken(
-      user.id,
-      user.email,
-    );
-    const refreshToken = this.jwtTokenService.generateRefreshToken(
-      user.id,
-      user.email,
-    );
-
-    const refreshTokenExpiresAt = new Date(
-      Date.now() + 7 * 24 * 60 * 60 * 1000,
-    );
-    this.otpService.saveRefreshToken(
-      refreshToken,
-      user.id,
-      refreshTokenExpiresAt,
-    );
-
-    // Lấy roles sử dụng query builder để chỉ lấy roles hợp lệ (có name không null)
-    const userWithRoles = await this.userRepository
-      .createQueryBuilder('user')
-      .leftJoinAndSelect('user.roles', 'role', 'role.name IS NOT NULL')
-      .where('user.id = :userId', { userId: user.id })
-      .getOne();
-
-    // Tạo object mới không chứa password
-    const userResponse: Omit<User, 'password'> = {
-      id: user.id,
-      vipLevelId: user.vipLevelId,
-      fullName: user.fullName,
-      email: user.email,
-      phone: user.phone,
-      avatar: user.avatar,
-      status: user.status,
-      totalSpending: user.totalSpending,
-      vipUpdatedAt: user.vipUpdatedAt,
-      createdAt: user.createdAt,
-      roles: userWithRoles?.roles || [],
-      vipLevel: user.vipLevel,
-    };
-
-    return {
-      message: 'Đăng nhập thành công',
-      user: userResponse,
-      accessToken,
-      refreshToken,
-    };
   }
 
   /**
-   * Bước 4: Refresh Token - sinh Access Token mới từ Refresh Token
+   * Bước 4: Refresh Token - Nhận diện Opaque Token 64 ký tự trực tiếp dưới DB
    */
   async refreshToken(
     refreshTokenDto: RefreshTokenDto,
   ): Promise<{ accessToken: string; refreshToken: string }> {
-    const { refreshToken } = refreshTokenDto;
+    try {
+      const { refreshToken } = refreshTokenDto;
 
-    const jwtPayload = this.jwtTokenService.verifyRefreshToken(
-      refreshToken,
-    ) as JwtPayload | null;
-    if (!jwtPayload) {
-      throw new UnauthorizedException(
-        'Refresh token không hợp lệ hoặc đã hết hạn',
+      console.log('[REFRESH_TOKEN] Starting token refresh:', {
+        tokenLength: refreshToken.length,
+      });
+
+      const isFormatValid =
+        this.jwtTokenService.verifyRefreshToken(refreshToken);
+
+      if (!isFormatValid) {
+        console.warn('[REFRESH_TOKEN] Token format format validation failed');
+        throw new UnauthorizedException('Refresh token không đúng định dạng');
+      }
+
+      // Tìm kiếm trực tiếp tài khoản sở hữu chuỗi token này trong Database
+      // Sử dụng select cụ thể để lấy lên trường refresh_token do entity đã cấu hình ẩn mặt định
+      const user = await this.userRepository.findOne({
+        where: { refreshToken },
+        select: [
+          'id',
+          'email',
+          'status',
+          'refreshToken',
+          'refreshTokenExpiresAt',
+        ],
+      });
+
+      console.log('[REFRESH_TOKEN] User lookup result:', {
+        found: !!user,
+        userId: user?.id,
+        status: user?.status,
+      });
+
+      if (!user || user.status !== 'ACTIVE') {
+        throw new UnauthorizedException(
+          'Tài khoản không tồn tại hoặc không hoạt động',
+        );
+      }
+
+      // Kiểm tra token đã hết hạn lưu trong bản ghi hay chưa
+      if (
+        !user.refreshTokenExpiresAt ||
+        new Date() > user.refreshTokenExpiresAt
+      ) {
+        console.warn('[REFRESH_TOKEN] Token has expired');
+        throw new UnauthorizedException('Refresh token đã hết hạn');
+      }
+
+      const newAccessToken = this.jwtTokenService.generateAccessToken(
+        user.id,
+        user.email,
       );
-    }
 
-    const tokenData = this.otpService.getRefreshTokenData(refreshToken);
-    if (!tokenData) {
-      throw new UnauthorizedException(
-        'Refresh token không tồn tại hoặc đã hết hạn',
+      const newRefreshToken = this.jwtTokenService.generateRefreshToken();
+
+      // Lưu token mới vào DB (Xoay vòng token liên tục bảo mật)
+      const newExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // Gia hạn thêm 24 giờ
+      await this.userRepository.update(
+        { id: user.id },
+        {
+          refreshToken: newRefreshToken,
+          refreshTokenExpiresAt: newExpiresAt,
+        },
       );
+
+      console.log(
+        '[REFRESH_TOKEN] Token refresh successful for user:',
+        user.id,
+      );
+
+      return {
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+      };
+    } catch (error) {
+      console.error('[REFRESH_TOKEN] Error during token refresh:', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
     }
-
-    const user = await this.userRepository.findOne({
-      where: { id: jwtPayload.userId },
-    });
-    if (!user || user.status !== 'ACTIVE') {
-      throw new UnauthorizedException('Tài khoản không hoạt động');
-    }
-
-    const newAccessToken = this.jwtTokenService.generateAccessToken(
-      user.id,
-      user.email,
-    );
-
-    const newRefreshToken = this.jwtTokenService.generateRefreshToken(
-      user.id,
-      user.email,
-    );
-
-    this.otpService.removeRefreshToken(refreshToken);
-    const newRefreshTokenExpiresAt = new Date(
-      Date.now() + 7 * 24 * 60 * 60 * 1000,
-    );
-    this.otpService.saveRefreshToken(
-      newRefreshToken,
-      user.id,
-      newRefreshTokenExpiresAt,
-    );
-
-    return {
-      accessToken: newAccessToken,
-      refreshToken: newRefreshToken,
-    };
   }
 
   /**
    * Bước 5: Logout - hủy Refresh Token
    */
-  logoutUser(logoutDto: LogoutDto): { message: string } {
-    const { refreshToken } = logoutDto;
+  async logoutUser(
+    logoutDto: LogoutDto,
+    userId: string,
+  ): Promise<{ message: string }> {
+    try {
+      const { refreshToken } = logoutDto;
 
-    const jwtPayload = this.jwtTokenService.verifyRefreshToken(
-      refreshToken,
-    ) as JwtPayload | null;
-    if (!jwtPayload) {
-      throw new UnauthorizedException('Refresh token không hợp lệ');
+      console.log('[LOGOUT] Starting logout process:', {
+        userId,
+        refreshTokenProvided: !!refreshToken,
+      });
+
+      if (!refreshToken) {
+        throw new BadRequestException('Refresh token không được để trống');
+      }
+
+      const isFormatValid =
+        this.jwtTokenService.verifyRefreshToken(refreshToken);
+
+      if (!isFormatValid) {
+        throw new UnauthorizedException('Refresh token không hợp lệ');
+      }
+
+      // Lấy thông tin user hiện tại từ Database để đối chiếu chuỗi token
+      const user = await this.userRepository.findOne({
+        where: { id: userId },
+        select: ['id', 'refreshToken'],
+      });
+
+      if (!user) {
+        throw new UnauthorizedException('User không tồn tại');
+      }
+
+      if (user.refreshToken !== refreshToken) {
+        console.warn('[LOGOUT] Token mismatch in DB');
+        throw new UnauthorizedException(
+          'Refresh token không khớp với token trong hệ thống',
+        );
+      }
+
+      await this.userRepository.update(
+        { id: userId },
+        {
+          refreshToken: null,
+          refreshTokenExpiresAt: null,
+        },
+      );
+
+      console.log('[LOGOUT] Logout successful for user:', userId);
+
+      return {
+        message: 'Đăng xuất thành công',
+      };
+    } catch (error) {
+      console.error('[LOGOUT] Error during logout:', {
+        error: error instanceof Error ? error.message : String(error),
+        userId,
+      });
+      throw error;
     }
-
-    const tokenData = this.otpService.getRefreshTokenData(refreshToken);
-    if (!tokenData) {
-      throw new UnauthorizedException('Refresh token không tồn tại');
-    }
-
-    this.otpService.removeRefreshToken(refreshToken);
-
-    return {
-      message: 'Đăng xuất thành công',
-    };
   }
 
   // ========== LUỒNG RESET PASSWORD ==========
@@ -302,7 +405,8 @@ export class UserService {
       );
     }
 
-    this.otpService.savePasswordResetOtp(email);
+    // Đã đồng bộ chữ async ở OtpService nên gọi await chuẩn cấu trúc bất đồng bộ
+    await this.otpService.savePasswordResetOtp(email);
 
     return {
       message: 'OTP reset password đã được gửi tới email của bạn.',
@@ -346,7 +450,7 @@ export class UserService {
   }
 
   /**
-   * Các hàm có sẵn
+   * Các hàm bổ trợ CRUD có sẵn
    */
   create(createUserDto: CreateUserDto) {
     const newUser = this.userRepository.create(createUserDto);
@@ -402,6 +506,7 @@ export class UserService {
 
   async getProfile(id: string): Promise<Omit<User, 'password' | 'roles'>> {
     const user = await this.findOne(id);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...result } = user;
     return result;
   }
@@ -412,12 +517,12 @@ export class UserService {
   ): Promise<Omit<User, 'password'>> {
     const user = await this.findOne(id);
 
-    // Chỉ cho phép cập nhật 1 số trường
     if (updateDto.fullName) user.fullName = updateDto.fullName;
     if (updateDto.phone) user.phone = updateDto.phone;
     if (updateDto.avatar) user.avatar = updateDto.avatar;
 
     const updatedUser = await this.userRepository.save(user);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password: _, ...result } = updatedUser;
     return result;
   }
