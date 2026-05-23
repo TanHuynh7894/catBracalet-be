@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import * as crypto from 'crypto'; // 🌟 1. Nhập thư viện core để đẻ chuỗi 64 ký tự
 
 interface JwtPayload {
   userId: string;
@@ -12,7 +13,6 @@ interface JwtPayload {
 @Injectable()
 export class JwtTokenService {
   private readonly accessTokenExpiration = '15m';
-  private readonly refreshTokenExpiration = '24h';
 
   constructor(
     private jwtService: JwtService,
@@ -20,21 +20,18 @@ export class JwtTokenService {
   ) {}
 
   /**
-   * Type guard an toàn tuyệt đối: Thay 'any' bằng 'unknown' để diệt tận gốc lỗi Unsafe member access
+   * Type guard an toàn tuyệt đối: Giữ nguyên để tránh lỗi linter
    */
   private isJwtPayload(payload: unknown): payload is JwtPayload {
     if (typeof payload !== 'object' || payload === null) {
       return false;
     }
-
-    // Ép sang Record kiểu thuần ẩn để đọc thuộc tính mà không dính lỗi linter
     const obj = payload as Record<string, unknown>;
-
     return typeof obj.userId === 'string' && typeof obj.email === 'string';
   }
 
   /**
-   * Sinh Access Token (15 phút)
+   * Sinh Access Token (15 phút) - GIỮ NGUYÊN JWT STATELÈSS
    */
   generateAccessToken(userId: string, email: string): string {
     const payload = { userId, email };
@@ -46,24 +43,19 @@ export class JwtTokenService {
   }
 
   /**
-   * Sinh Refresh Token (7 ngày)
+   * Sinh Refresh Token (Opaque Token) - 🌟 SỬA TẠI ĐÂY
+   * Bỏ tham số đầu vào (userId, email), đẻ thẳng chuỗi 64 ký tự cố định
    */
-  generateRefreshToken(userId: string, email: string): string {
-    const payload = { userId, email };
-
-    return this.jwtService.sign(payload, {
-      secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-      expiresIn: this.refreshTokenExpiration,
-    });
+  generateRefreshToken(): string {
+    return crypto.randomBytes(32).toString('hex');
   }
 
   /**
-   * Xác minh Access Token
+   * Xác minh Access Token - GIỮ NGUYÊN JWT
    */
   verifyAccessToken(token: string): JwtPayload | null {
     try {
       console.log('[JWT.TOKEN_SERVICE] Verifying access token');
-      // Ép kiểu đầu ra từ 'any' về 'unknown' để dập tắt hoàn toàn lỗi Unsafe assignment
       const decoded = this.jwtService.verify(token, {
         secret: this.configService.get<string>('JWT_SECRET'),
       }) as unknown;
@@ -87,31 +79,24 @@ export class JwtTokenService {
   }
 
   /**
-   * Xác minh Refresh Token
+   * Xác minh cấu trúc Refresh Token - 🌟 SỬA TẠI ĐÂY
+   * Vì token giờ là chuỗi 64 ký tự ngẫu nhiên, không thể dùng jwtService.verify() được nữa.
+   * Ta sửa hàm này thành hàm check độ dài hợp lệ (đủ 64 ký tự) để không làm gãy code ở nơi khác gọi tới.
    */
-  verifyRefreshToken(token: string): JwtPayload | null {
+  verifyRefreshToken(token: string): boolean {
     try {
-      console.log('[JWT.TOKEN_SERVICE] Verifying refresh token');
-      // Ép kiểu đầu ra từ 'any' về 'unknown' để dập tắt hoàn toàn lỗi Unsafe assignment
-      const decoded = this.jwtService.verify(token, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-      }) as unknown;
+      console.log('[JWT.TOKEN_SERVICE] Checking opaque refresh token format');
 
-      if (this.isJwtPayload(decoded)) {
-        console.log('[JWT.TOKEN_SERVICE] Refresh token verified:', {
-          userId: decoded.userId,
-          email: decoded.email,
-        });
-        return decoded;
+      if (!token || token.length !== 64) {
+        console.warn(
+          '[JWT.TOKEN_SERVICE] Refresh token format invalid (Not 64 chars)',
+        );
+        return false;
       }
 
-      console.warn('[JWT.TOKEN_SERVICE] Refresh token payload invalid');
-      return null;
-    } catch (error) {
-      console.error('[JWT.TOKEN_SERVICE] Refresh token verification failed:', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return null;
+      return true;
+    } catch {
+      return false;
     }
   }
 }

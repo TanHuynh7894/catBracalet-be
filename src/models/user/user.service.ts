@@ -30,11 +30,6 @@ interface PendingUserData {
   phone?: string;
 }
 
-interface JwtPayload {
-  userId: string;
-  email: string;
-}
-
 import { Role } from '../role/entities/role.entity';
 
 @Injectable()
@@ -129,9 +124,6 @@ export class UserService {
   /**
    * Bước 3: Đăng nhập - trả về cặp Access + Refresh Token
    */
-  /**
-   * Bước 3: Đăng nhập - trả về cặp Access + Refresh Token
-   */
   async loginUser(loginUserDto: LoginUserDto): Promise<{
     message: string;
     user: Omit<User, 'password'>;
@@ -143,7 +135,7 @@ export class UserService {
 
       console.log('[LOGIN] Starting login process:', { email });
 
-      // Lấy user mà không load relations
+      // Lấy user kèm theo relations để xử lý thông tin phản hồi công khai
       const user = await this.userRepository.findOne({
         where: { email },
         relations: ['roles', 'vipLevel'],
@@ -154,7 +146,10 @@ export class UserService {
         throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
       }
 
-      console.log('[LOGIN] User found:', { userId: user.id, email: user.email });
+      console.log('[LOGIN] User found:', {
+        userId: user.id,
+        email: user.email,
+      });
 
       if (user.status !== 'ACTIVE') {
         console.warn('[LOGIN] Account not active:', {
@@ -178,10 +173,9 @@ export class UserService {
         user.id,
         user.email,
       );
-      const refreshToken = this.jwtTokenService.generateRefreshToken(
-        user.id,
-        user.email,
-      );
+
+      // 🌟 SỬA LỖI TS2554: Xóa bỏ các tham số thừa (user.id, user.email) vì hàm mới không yêu cầu
+      const refreshToken = this.jwtTokenService.generateRefreshToken();
 
       console.log('[LOGIN] Tokens generated:', {
         accessTokenLength: accessToken.length,
@@ -245,7 +239,7 @@ export class UserService {
   }
 
   /**
-   * Bước 4: Refresh Token - sinh Access Token mới từ Refresh Token
+   * Bước 4: Refresh Token - Nhận diện Opaque Token 64 ký tự trực tiếp dưới DB
    */
   async refreshToken(
     refreshTokenDto: RefreshTokenDto,
@@ -255,29 +249,28 @@ export class UserService {
 
       console.log('[REFRESH_TOKEN] Starting token refresh:', {
         tokenLength: refreshToken.length,
-        tokenStart: refreshToken.substring(0, 20) + '...',
       });
 
-      const jwtPayload = this.jwtTokenService.verifyRefreshToken(
-        refreshToken,
-      ) as JwtPayload | null;
+      // 🌟 SỬA LỖI TS2352: Xác thực cấu trúc định dạng chuỗi 64 ký tự thay vì giải mã JWT payload
+      const isFormatValid =
+        this.jwtTokenService.verifyRefreshToken(refreshToken);
 
-      console.log('[REFRESH_TOKEN] JWT verification result:', {
-        isValid: !!jwtPayload,
-        userId: jwtPayload?.userId,
-        email: jwtPayload?.email,
-      });
-
-      if (!jwtPayload) {
-        console.warn('[REFRESH_TOKEN] JWT verification failed');
-        throw new UnauthorizedException(
-          'Refresh token không hợp lệ hoặc đã hết hạn',
-        );
+      if (!isFormatValid) {
+        console.warn('[REFRESH_TOKEN] Token format format validation failed');
+        throw new UnauthorizedException('Refresh token không đúng định dạng');
       }
 
-      // Lấy user và kiểm tra token từ database
+      // Tìm kiếm trực tiếp tài khoản sở hữu chuỗi token này trong Database
+      // Sử dụng select cụ thể để lấy lên trường refresh_token do entity đã cấu hình ẩn mặt định
       const user = await this.userRepository.findOne({
-        where: { id: jwtPayload.userId },
+        where: { refreshToken },
+        select: [
+          'id',
+          'email',
+          'status',
+          'refreshToken',
+          'refreshTokenExpiresAt',
+        ],
       });
 
       console.log('[REFRESH_TOKEN] User lookup result:', {
@@ -287,35 +280,12 @@ export class UserService {
       });
 
       if (!user || user.status !== 'ACTIVE') {
-        console.warn('[REFRESH_TOKEN] User not found or inactive:', {
-          userId: jwtPayload.userId,
-          found: !!user,
-          status: user?.status,
-        });
-        throw new UnauthorizedException('Tài khoản không hoạt động');
-      }
-
-      // Kiểm tra token có trùng khớp không
-      console.log('[REFRESH_TOKEN] Token DB match check:', {
-        tokenInDb: user.refreshToken?.substring(0, 20) + '...' || 'null',
-        tokenProvided: refreshToken.substring(0, 20) + '...',
-        match: user.refreshToken === refreshToken,
-      });
-
-      if (user.refreshToken !== refreshToken) {
-        console.warn('[REFRESH_TOKEN] Token mismatch in DB');
         throw new UnauthorizedException(
-          'Refresh token không hợp lệ hoặc không khớp',
+          'Tài khoản không tồn tại hoặc không hoạt động',
         );
       }
 
-      // Kiểm tra token đã hết hạn chưa
-      console.log('[REFRESH_TOKEN] Token expiration check:', {
-        expiresAt: user.refreshTokenExpiresAt,
-        now: new Date(),
-        expired: !user.refreshTokenExpiresAt || new Date() > user.refreshTokenExpiresAt,
-      });
-
+      // Kiểm tra token đã hết hạn lưu trong bản ghi hay chưa
       if (
         !user.refreshTokenExpiresAt ||
         new Date() > user.refreshTokenExpiresAt
@@ -329,13 +299,11 @@ export class UserService {
         user.email,
       );
 
-      const newRefreshToken = this.jwtTokenService.generateRefreshToken(
-        user.id,
-        user.email,
-      );
+      // 🌟 SỬA LỖI TS2554: Xóa bỏ tham số thừa khi gọi hàm sinh mã Opaque mới
+      const newRefreshToken = this.jwtTokenService.generateRefreshToken();
 
-      // Lưu token mới vào DB
-      const newExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 giờ
+      // Lưu token mới vào DB (Xoay vòng token liên tục bảo mật)
+      const newExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // Gia hạn thêm 24 giờ
       await this.userRepository.update(
         { id: user.id },
         {
@@ -344,7 +312,10 @@ export class UserService {
         },
       );
 
-      console.log('[REFRESH_TOKEN] Token refresh successful for user:', user.id);
+      console.log(
+        '[REFRESH_TOKEN] Token refresh successful for user:',
+        user.id,
+      );
 
       return {
         accessToken: newAccessToken,
@@ -353,7 +324,6 @@ export class UserService {
     } catch (error) {
       console.error('[REFRESH_TOKEN] Error during token refresh:', {
         error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
       });
       throw error;
     }
@@ -361,8 +331,6 @@ export class UserService {
 
   /**
    * Bước 5: Logout - hủy Refresh Token
-   * @param logoutDto - Chứa refreshToken từ body
-   * @param userId - ID của user từ JWT payload trong request (từ @CurrentUser decorator)
    */
   async logoutUser(
     logoutDto: LogoutDto,
@@ -374,92 +342,46 @@ export class UserService {
       console.log('[LOGOUT] Starting logout process:', {
         userId,
         refreshTokenProvided: !!refreshToken,
-        refreshTokenLength: refreshToken?.length || 0,
       });
 
       if (!refreshToken) {
-        console.error('[LOGOUT] No refresh token provided in request body');
         throw new BadRequestException('Refresh token không được để trống');
       }
 
-      const jwtPayload = this.jwtTokenService.verifyRefreshToken(
-        refreshToken,
-      ) as JwtPayload | null;
+      // 🌟 SỬA LỖI TS2352: Xác thực cấu trúc chuỗi 64 ký tự thay vì bóc tách cục payload JWT
+      const isFormatValid =
+        this.jwtTokenService.verifyRefreshToken(refreshToken);
 
-      console.log('[LOGOUT] Token verification result:', {
-        isValid: !!jwtPayload,
-        payloadUserId: jwtPayload?.userId,
-        payloadEmail: jwtPayload?.email,
-      });
-
-      if (!jwtPayload) {
-        console.warn('[LOGOUT] Refresh token verification failed:', {
-          userId,
-          token: refreshToken.substring(0, 20) + '...',
-        });
+      if (!isFormatValid) {
         throw new UnauthorizedException('Refresh token không hợp lệ');
       }
 
-      console.log('[LOGOUT] Token payload extracted:', {
-        payloadUserId: jwtPayload.userId,
-        currentUserId: userId,
-        match: jwtPayload.userId === userId,
-      });
-
-      if (jwtPayload.userId !== userId) {
-        console.warn('[LOGOUT] User ID mismatch:', {
-          tokenUserId: jwtPayload.userId,
-          currentUserId: userId,
-        });
-        throw new UnauthorizedException(
-          'Refresh token không khớp với user hiện tại',
-        );
-      }
-
-      // Lấy user để kiểm tra token trong DB trước khi logout
+      // Lấy thông tin user hiện tại từ Database để đối chiếu chuỗi token
       const user = await this.userRepository.findOne({
         where: { id: userId },
+        select: ['id', 'refreshToken'],
       });
 
       if (!user) {
-        console.error('[LOGOUT] User not found:', { userId });
         throw new UnauthorizedException('User không tồn tại');
       }
 
-      console.log('[LOGOUT] User found, checking token in DB:', {
-        userId,
-        tokenInDbExists: !!user.refreshToken,
-        tokenInDbMatches: user.refreshToken === refreshToken,
-      });
-
       if (user.refreshToken !== refreshToken) {
-        console.warn('[LOGOUT] Token mismatch in DB:', {
-          userId,
-          tokenInDb: user.refreshToken?.substring(0, 20) + '...' || 'null',
-          tokenProvided: refreshToken.substring(0, 20) + '...',
-        });
+        console.warn('[LOGOUT] Token mismatch in DB');
         throw new UnauthorizedException(
-          'Refresh token không khớp với token trong DB',
+          'Refresh token không khớp với token trong hệ thống',
         );
       }
 
-      console.log('[LOGOUT] All checks passed, updating user record:', {
-        userId,
-      });
-
-      const result = await this.userRepository.update(
+      // Tiến hành xóa sạch token, đưa trạng thái về null bảo mật toàn diện
+      // 🌟 SỬA LỖI (ESLint): Khắc phục lỗi Unsafe assignment bằng cách ép kiểu qua câu update TypeORM rõ ràng
+      await this.userRepository.update(
         { id: userId },
         {
           refreshToken: null,
           refreshTokenExpiresAt: null,
         },
       );
-
-      console.log('[LOGOUT] Update result:', {
-        userId,
-        affected: result.affected,
-        raw: result.raw,
-      });
 
       console.log('[LOGOUT] Logout successful for user:', userId);
 
@@ -469,7 +391,6 @@ export class UserService {
     } catch (error) {
       console.error('[LOGOUT] Error during logout:', {
         error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
         userId,
       });
       throw error;
@@ -537,7 +458,7 @@ export class UserService {
   }
 
   /**
-   * Các hàm có sẵn
+   * Các hàm bổ trợ CRUD có sẵn
    */
   create(createUserDto: CreateUserDto) {
     const newUser = this.userRepository.create(createUserDto);
@@ -604,7 +525,6 @@ export class UserService {
   ): Promise<Omit<User, 'password'>> {
     const user = await this.findOne(id);
 
-    // Chỉ cho phép cập nhật 1 số trường
     if (updateDto.fullName) user.fullName = updateDto.fullName;
     if (updateDto.phone) user.phone = updateDto.phone;
     if (updateDto.avatar) user.avatar = updateDto.avatar;

@@ -40,9 +40,11 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       }
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-      console.log('[JWT.AUTH.GUARD] Authentication successful for user:',
+      console.log(
+        '[JWT.AUTH.GUARD] Authentication successful for user:',
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        user.id);
+        user.id,
+      );
       // eslint-disable-next-line @typescript-eslint/no-unsafe-return
       return user;
     } catch (error) {
