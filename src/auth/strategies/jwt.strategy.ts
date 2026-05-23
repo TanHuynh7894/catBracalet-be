@@ -1,13 +1,15 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { User } from '../../models/user/entities/user.entity';
+import { UserService } from '../../models/user/user.service';
 
 interface JwtPayload {
-  userId: string;
+  id?: string;
+  sub?: string;
   email: string;
   iat?: number;
   exp?: number;
@@ -16,49 +18,37 @@ interface JwtPayload {
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
-    private configService: ConfigService,
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
+    private readonly configService: ConfigService,
+    private readonly userService: UserService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET'),
+      secretOrKey: configService.get<string>('JWT_SECRET') ?? 'DEFAULT_SECRET',
     });
   }
 
-  async validate(payload: JwtPayload): Promise<User> {
+  async validate(payload: JwtPayload) {
+    const userId = payload.sub || payload.id;
+
     console.log('[JWT.STRATEGY] Validating token payload:', {
-      userId: payload.userId,
+      userId,
       email: payload.email,
-      iat: payload.iat,
-      exp: payload.exp,
     });
 
-    const user = await this.userRepository.findOne({
-      where: { id: payload.userId },
-      relations: ['roles', 'vipLevel'],
-    });
+    if (!userId) {
+      throw new UnauthorizedException(
+        'Token không chứa thông tin định danh hợp lệ',
+      );
+    }
+
+    const user = await this.userService.findOne(userId);
 
     if (!user) {
-      console.error(
-        '[JWT.STRATEGY] User not found for userId:',
-        payload.userId,
-      );
       throw new UnauthorizedException('User không tồn tại');
     }
 
-    console.log('[JWT.STRATEGY] User found:', {
-      id: user.id,
-      email: user.email,
-      status: user.status,
-    });
-
     if (user.status !== 'ACTIVE') {
-      console.warn('[JWT.STRATEGY] Account not active:', {
-        userId: user.id,
-        status: user.status,
-      });
       throw new UnauthorizedException('Tài khoản không hoạt động');
     }
 

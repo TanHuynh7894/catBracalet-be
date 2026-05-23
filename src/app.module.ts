@@ -22,6 +22,7 @@ import { AuthModule } from './auth/auth.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: '.env',
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -33,6 +34,14 @@ import { AuthModule } from './auth/auth.module';
         console.log('Username:', configService.get<string>('user_DB'));
         console.log('Password:', configService.get<string>('password_DB'));
         console.log('Database:', configService.get<string>('name_DB'));
+        console.log('------------------------------');
+
+        console.log('--- MAIL CONFIGURATION ---');
+        console.log('MAIL_HOST:', configService.get<string>('MAIL_HOST'));
+        console.log('MAIL_PORT:', configService.get<string>('MAIL_PORT'));
+        console.log('MAIL_USER:', configService.get<string>('MAIL_USER'));
+        console.log('MAIL_FROM:', configService.get<string>('MAIL_FROM'));
+        console.log('MAIL_SECURE:', configService.get<string>('MAIL_SECURE'));
         console.log('------------------------------');
 
         return {

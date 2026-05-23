@@ -23,13 +23,6 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { OtpService } from './services/otp.service';
 import { JwtTokenService } from './services/jwt-token.service';
 
-interface PendingUserData {
-  email: string;
-  fullName: string;
-  password: string;
-  phone?: string;
-}
-
 import { Role } from '../role/entities/role.entity';
 
 @Injectable()
@@ -70,7 +63,14 @@ export class UserService {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    this.otpService.savePendingUser(email, fullName, hashedPassword, phone);
+
+    // Đã đồng bộ chữ async ở OtpService nên gọi await chuẩn cấu trúc bất đồng bộ
+    await this.otpService.savePendingUser(
+      email,
+      fullName,
+      hashedPassword,
+      phone,
+    );
 
     return {
       message: 'Đăng ký thành công. Vui lòng kiểm tra email để xác thực OTP.',
@@ -86,10 +86,7 @@ export class UserService {
   ): Promise<{ message: string; user: Omit<User, 'password'> }> {
     const { email, otp } = verifyOtpDto;
 
-    const pendingUser = this.otpService.verifyOtp(
-      email,
-      otp,
-    ) as PendingUserData | null;
+    const pendingUser = this.otpService.verifyOtp(email, otp);
     if (!pendingUser) {
       throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn');
     }
@@ -174,7 +171,6 @@ export class UserService {
         user.email,
       );
 
-      // 🌟 SỬA LỖI TS2554: Xóa bỏ các tham số thừa (user.id, user.email) vì hàm mới không yêu cầu
       const refreshToken = this.jwtTokenService.generateRefreshToken();
 
       console.log('[LOGIN] Tokens generated:', {
@@ -251,7 +247,6 @@ export class UserService {
         tokenLength: refreshToken.length,
       });
 
-      // 🌟 SỬA LỖI TS2352: Xác thực cấu trúc định dạng chuỗi 64 ký tự thay vì giải mã JWT payload
       const isFormatValid =
         this.jwtTokenService.verifyRefreshToken(refreshToken);
 
@@ -299,7 +294,6 @@ export class UserService {
         user.email,
       );
 
-      // 🌟 SỬA LỖI TS2554: Xóa bỏ tham số thừa khi gọi hàm sinh mã Opaque mới
       const newRefreshToken = this.jwtTokenService.generateRefreshToken();
 
       // Lưu token mới vào DB (Xoay vòng token liên tục bảo mật)
@@ -348,7 +342,6 @@ export class UserService {
         throw new BadRequestException('Refresh token không được để trống');
       }
 
-      // 🌟 SỬA LỖI TS2352: Xác thực cấu trúc chuỗi 64 ký tự thay vì bóc tách cục payload JWT
       const isFormatValid =
         this.jwtTokenService.verifyRefreshToken(refreshToken);
 
@@ -373,8 +366,6 @@ export class UserService {
         );
       }
 
-      // Tiến hành xóa sạch token, đưa trạng thái về null bảo mật toàn diện
-      // 🌟 SỬA LỖI (ESLint): Khắc phục lỗi Unsafe assignment bằng cách ép kiểu qua câu update TypeORM rõ ràng
       await this.userRepository.update(
         { id: userId },
         {
@@ -414,7 +405,8 @@ export class UserService {
       );
     }
 
-    this.otpService.savePasswordResetOtp(email);
+    // Đã đồng bộ chữ async ở OtpService nên gọi await chuẩn cấu trúc bất đồng bộ
+    await this.otpService.savePasswordResetOtp(email);
 
     return {
       message: 'OTP reset password đã được gửi tới email của bạn.',

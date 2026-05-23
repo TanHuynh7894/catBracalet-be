@@ -1,278 +1,218 @@
-﻿import { Injectable } from '@nestjs/common';
+﻿/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 
-interface PendingUserData {
+import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import * as crypto from 'crypto';
+import * as nodemailer from 'nodemailer';
+
+export interface PendingUserData {
   email: string;
   fullName: string;
   password: string;
   phone?: string;
-  otp: string;
-  otpExpiredAt: Date;
-  createdAt: Date;
 }
 
-interface PasswordResetOtpData {
-  email: string;
+interface OtpData {
   otp: string;
-  otpExpiredAt: Date;
-  createdAt: Date;
-}
-
-interface ActiveRefreshTokenData {
-  userId: string;
-  token: string;
   expiresAt: Date;
-  createdAt: Date;
 }
 
 @Injectable()
-export class OtpService {
+export class OtpService implements OnModuleInit {
+  private readonly logger = new Logger(OtpService.name);
   private pendingUsers = new Map<string, PendingUserData>();
-  private passwordResetOtps = new Map<string, PasswordResetOtpData>();
-  private activeRefreshTokens = new Map<string, ActiveRefreshTokenData>();
+  private registerOtps = new Map<string, OtpData>();
+  private passwordResetOtps = new Map<string, OtpData>();
+  private transporter: nodemailer.Transporter | null = null;
 
-  /**
-   * Tạo mã OTP 6 chữ số
-   */
-  generateOtp(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+  constructor(private readonly configService: ConfigService) {}
+
+  async onModuleInit() {
+    await this.initTransporter();
   }
 
-  // ========== PENDING USER METHODS ==========
+  private async initTransporter() {
+    const host =
+      this.configService.get<string>('MAIL_HOST') || 'smtp.gmail.com';
+    const portRaw = this.configService.get<string>('MAIL_PORT');
+    const port = portRaw ? parseInt(portRaw, 10) : 587; // Mặc định là 587 nếu trống
+    const secureRaw = this.configService.get<string>('MAIL_SECURE');
+    const secure =
+      typeof secureRaw === 'string' ? secureRaw === 'true' : port === 465;
 
-  /**
-   * Lưu dữ liệu đăng ký tạm thời với OTP
-   */
-  savePendingUser(
-    email: string,
-    fullName: string,
-    password: string,
-    phone?: string,
-  ): string {
-    const otp = this.generateOtp();
-    const now = new Date();
+    const user = this.configService.get<string>('MAIL_USER');
+    const pass = this.configService.get<string>('MAIL_PASSWORD');
 
-    this.pendingUsers.set(email, {
-      email,
-      fullName,
-      password,
-      phone,
-      otp,
-      otpExpiredAt: new Date(now.getTime() + 10 * 60 * 1000),
-      createdAt: now,
+    // CẤU HÌNH SỬA ĐỔI: Tối ưu hóa cho cả cổng 465 và 587 của Gmail
+    this.transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure, // Sẽ bằng false đối với cổng 587
+      auth: user && pass ? { user, pass } : undefined,
+      tls: {
+        // Ép buộc hoặc hỗ trợ STARTTLS không bị chặn bởi chứng chỉ self-signed local
+        rejectUnauthorized: false,
+      },
+      logger: process.env.NODE_ENV !== 'production',
+      debug: process.env.NODE_ENV !== 'production',
     });
 
-    console.log(`[OTP] Email: ${email}, OTP: ${otp}`);
-
-    return otp;
-  }
-
-  /**
-   * Xác thực OTP cho đăng ký
-   */
-  verifyOtp(email: string, otp: string): PendingUserData | null {
-    const pending = this.pendingUsers.get(email);
-
-    if (!pending) {
-      return null;
+    try {
+      // Hàm verify này sẽ kết nối thử đến Google bằng tài khoản và mật khẩu ứng dụng của ông
+      await this.transporter.verify();
+      this.logger.log('=== [SUCCESS] Kết nối đến Server Gmail thành công! ===');
+    } catch (err) {
+      this.logger.error('=== [ERROR] Kết nối Gmail thất bại! ===', err);
     }
 
-    if (new Date() > pending.otpExpiredAt) {
-      this.pendingUsers.delete(email);
-      return null;
+    if (!user || !pass) {
+      this.logger.warn('MAIL_USER or MAIL_PASSWORD is not set. Check .env');
     }
-
-    if (pending.otp !== otp) {
-      return null;
-    }
-
-    return pending;
   }
 
-  /**
-   * Xóa dữ liệu pending sau khi đăng ký thành công
-   */
-  removePendingUser(email: string): void {
-    this.pendingUsers.delete(email);
+  private generateOtpCode(): string {
+    return crypto.randomInt(100000, 999999).toString();
   }
 
-  /**
-   * Kiểm tra pending user có tồn tại không
-   */
   hasPendingUser(email: string): boolean {
     return this.pendingUsers.has(email);
   }
 
-  /**
-   * Lấy thông tin pending user (để debug)
-   */
-  getPendingUser(email: string): PendingUserData | undefined {
-    return this.pendingUsers.get(email);
+  private ensureTransporter() {
+    if (!this.transporter) {
+      throw new Error('Mail transporter is not initialized');
+    }
+    return this.transporter;
   }
 
-  // ========== PASSWORD RESET OTP METHODS ==========
-
-  /**
-   * Lưu OTP cho reset password
-   */
-  savePasswordResetOtp(email: string): string {
-    const otp = this.generateOtp();
-    const now = new Date();
-
-    this.passwordResetOtps.set(email, {
+  async savePendingUser(
+    email: string,
+    fullName: string,
+    passwordHashed: string,
+    phone?: string,
+  ): Promise<void> {
+    this.pendingUsers.set(email, {
       email,
-      otp,
-      otpExpiredAt: new Date(now.getTime() + 10 * 60 * 1000),
-      createdAt: now,
+      fullName,
+      password: passwordHashed,
+      phone,
     });
 
-    console.log(`[PASSWORD_RESET_OTP] Email: ${email}, OTP: ${otp}`);
+    const otp = this.generateOtpCode();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    this.registerOtps.set(email, { otp, expiresAt });
 
-    return otp;
+    const mailFrom =
+      this.configService.get<string>('MAIL_FROM') ||
+      this.configService.get<string>('MAIL_USER');
+    const systemName =
+      this.configService.get<string>('APP_NAME') ?? 'Hệ Thống Vòng Tay';
+
+    try {
+      const transporter = this.ensureTransporter();
+      const info = await transporter.sendMail({
+        from: `"${systemName}" <${mailFrom}>`,
+        to: email,
+        subject: 'Mã OTP Xác Thực Đăng Ký Tài Khoản',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
+            <h3 style="color: #333;">Xin chào ${fullName},</h3>
+            <p>Cảm ơn bạn đã đăng ký tài khoản. Mã OTP kích hoạt của bạn là:</p>
+            <div style="background: #f4f4f4; padding: 15px; text-align: center; border-radius: 4px;">
+              <h2 style="color: #4CAF50; letter-spacing: 4px; margin: 0; font-size: 30px;">${otp}</h2>
+            </div>
+            <p style="color: #666; font-size: 13px; margin-top: 15px;">Mã này có hiệu lực trong vòng <b>5 phút</b>. Vui lòng không chia sẻ mã này cho bất kỳ ai.</p>
+          </div>
+        `,
+      });
+
+      this.logger.log(`Email sent to ${email}. messageId=${info.messageId}`);
+    } catch (error) {
+      this.logger.error(
+        '[OTP_SERVICE] Failed to send registration OTP email',
+        error,
+      );
+      this.removePendingUser(email);
+      throw error;
+    }
   }
 
-  /**
-   * Xác thực OTP cho reset password
-   */
-  verifyPasswordResetOtp(
-    email: string,
-    otp: string,
-  ): PasswordResetOtpData | null {
-    const resetOtp = this.passwordResetOtps.get(email);
+  verifyOtp(email: string, otp: string): PendingUserData | null {
+    const otpData = this.registerOtps.get(email);
+    if (!otpData) return null;
 
-    if (!resetOtp) {
+    if (new Date() > otpData.expiresAt) {
+      this.removePendingUser(email);
       return null;
     }
 
-    if (new Date() > resetOtp.otpExpiredAt) {
+    if (otpData.otp !== otp) return null;
+
+    return this.pendingUsers.get(email) || null;
+  }
+
+  removePendingUser(email: string): void {
+    this.pendingUsers.delete(email);
+    this.registerOtps.delete(email);
+  }
+
+  async savePasswordResetOtp(email: string): Promise<void> {
+    const otp = this.generateOtpCode();
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    this.passwordResetOtps.set(email, { otp, expiresAt });
+
+    const mailFrom =
+      this.configService.get<string>('MAIL_FROM') ||
+      this.configService.get<string>('MAIL_USER');
+    const systemName =
+      this.configService.get<string>('APP_NAME') ?? 'Hệ Thống Vòng Tay';
+
+    try {
+      const transporter = this.ensureTransporter();
+      const info = await transporter.sendMail({
+        from: `"${systemName}" <${mailFrom}>`,
+        to: email,
+        subject: 'Yêu Cầu Đặt Lại Mật Khẩu',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 5px;">
+            <h3 style="color: #333;">Yêu cầu đặt lại mật khẩu</h3>
+            <p>Chúng tôi nhận được yêu cầu cấp lại mật khẩu cho tài khoản của bạn. Mã OTP reset là:</p>
+            <div style="background: #f4f4f4; padding: 15px; text-align: center; border-radius: 4px;">
+              <h2 style="color: #FF5722; letter-spacing: 4px; margin: 0; font-size: 30px;">${otp}</h2>
+            </div>
+            <p style="color: #666; font-size: 13px; margin-top: 15px;">Mã có hiệu lực trong 5 phút.</p>
+          </div>
+        `,
+      });
+
+      this.logger.log(
+        `Password reset email sent to ${email}. messageId=${info.messageId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        '[OTP_SERVICE] Failed to send password reset email',
+        error,
+      );
       this.passwordResetOtps.delete(email);
-      return null;
+      throw error;
     }
-
-    if (resetOtp.otp !== otp) {
-      return null;
-    }
-
-    return resetOtp;
   }
 
-  /**
-   * Xóa OTP reset password sau khi reset thành công
-   */
+  verifyPasswordResetOtp(email: string, otp: string): boolean {
+    const otpData = this.passwordResetOtps.get(email);
+    if (!otpData) return false;
+
+    if (new Date() > otpData.expiresAt) {
+      this.passwordResetOtps.delete(email);
+      return false;
+    }
+
+    return otpData.otp === otp;
+  }
+
   removePasswordResetOtp(email: string): void {
     this.passwordResetOtps.delete(email);
-  }
-
-  /**
-   * Kiểm tra OTP reset password có tồn tại không
-   */
-  hasPasswordResetOtp(email: string): boolean {
-    return this.passwordResetOtps.has(email);
-  }
-
-  // ========== REFRESH TOKEN METHODS (MEMORY CACHE) ==========
-
-  /**
-   * Lưu Refresh Token hoạt động vào memory cache
-   */
-  saveRefreshToken(token: string, userId: string, expiresAt: Date): void {
-    this.activeRefreshTokens.set(token, {
-      userId,
-      token,
-      expiresAt,
-      createdAt: new Date(),
-    });
-
-    console.log(`[REFRESH_TOKEN] Token saved for userId: ${userId}`);
-  }
-
-  /**
-   * Kiểm tra Refresh Token có tồn tại và còn hạn không
-   */
-  hasRefreshToken(token: string): boolean {
-    const tokenData = this.activeRefreshTokens.get(token);
-
-    if (!tokenData) {
-      return false;
-    }
-
-    // Kiểm tra token đã hết hạn
-    if (new Date() > tokenData.expiresAt) {
-      this.activeRefreshTokens.delete(token);
-      return false;
-    }
-
-    return true;
-  }
-
-  /**
-   * Lấy thông tin Refresh Token
-   */
-  getRefreshTokenData(token: string): ActiveRefreshTokenData | null {
-    const tokenData = this.activeRefreshTokens.get(token);
-
-    if (!tokenData) {
-      return null;
-    }
-
-    // Kiểm tra token đã hết hạn
-    if (new Date() > tokenData.expiresAt) {
-      this.activeRefreshTokens.delete(token);
-      return null;
-    }
-
-    return tokenData;
-  }
-
-  /**
-   * Xóa Refresh Token (logout)
-   */
-  removeRefreshToken(token: string): void {
-    this.activeRefreshTokens.delete(token);
-    console.log(`[REFRESH_TOKEN] Token removed (logout)`);
-  }
-
-  /**
-   * Xóa tất cả Refresh Token của một user (optional)
-   */
-  removeAllRefreshTokensByUserId(userId: string): void {
-    const tokensToDelete: string[] = [];
-
-    this.activeRefreshTokens.forEach((tokenData, token) => {
-      if (tokenData.userId === userId) {
-        tokensToDelete.push(token);
-      }
-    });
-
-    tokensToDelete.forEach((token) => {
-      this.activeRefreshTokens.delete(token);
-    });
-
-    console.log(
-      `[REFRESH_TOKEN] Removed ${tokensToDelete.length} tokens for userId: ${userId}`,
-    );
-  }
-
-  /**
-   * Xóa tất cả expired tokens (có thể chạy cron job định kỳ)
-   */
-  cleanupExpiredTokens(): number {
-    const now = new Date();
-    const expiredTokens: string[] = [];
-
-    this.activeRefreshTokens.forEach((tokenData, token) => {
-      if (now > tokenData.expiresAt) {
-        expiredTokens.push(token);
-      }
-    });
-
-    expiredTokens.forEach((token) => {
-      this.activeRefreshTokens.delete(token);
-    });
-
-    console.log(
-      `[REFRESH_TOKEN] Cleaned up ${expiredTokens.length} expired tokens`,
-    );
-
-    return expiredTokens.length;
   }
 }
