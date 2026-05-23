@@ -6,11 +6,20 @@
   Patch,
   Param,
   Delete,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator';
+import { User } from './entities/user.entity';
 
 import { RegisterUserDto } from './dto/register-user.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
@@ -73,13 +82,16 @@ export class UserController {
   }
 
   @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Logout user',
-    description: 'Step 5: Revoke the refresh token and logout',
+    description:
+      'Revoke the refresh token and logout using access token from header',
   })
   @ApiResponse({ status: 200, description: 'Logout successful' })
-  logout(@Body() logoutDto: LogoutDto) {
-    return this.userService.logoutUser(logoutDto);
+  logout(@CurrentUser() user: User, @Body() logoutDto: LogoutDto) {
+    return this.userService.logoutUser(logoutDto, user.id);
   }
 
   @Post('request-password-reset')
@@ -121,6 +133,8 @@ export class UserController {
   }
 
   @Get('profile/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Get user profile',
     description: 'Retrieve profile details for a specific user',
@@ -130,6 +144,8 @@ export class UserController {
   }
 
   @Patch('profile/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Update user profile',
     description: 'Update basic profile information for a user',
@@ -139,6 +155,8 @@ export class UserController {
   }
 
   @Post('change-password/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Change user password',
     description: 'Update user password after verifying the old one',
@@ -194,8 +212,8 @@ export class UserController {
 
   @Delete(':id')
   @ApiOperation({
-    summary: 'Delete user',
-    description: 'Permanently remove a user from the system',
+    summary: 'Delete user (Admin)',
+    description: 'Remove a user from the system',
   })
   remove(@Param('id') id: string) {
     return this.userService.remove(id);

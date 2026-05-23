@@ -24,7 +24,21 @@ async function bootstrap() {
     .setTitle('Cat Bracelet API')
     .setDescription('The Cat Bracelet API description')
     .setVersion('1.0')
+    // 🌟 THÊM ĐÚNG KHỐI NÀY ĐỂ KÍCH HOẠT NÚT AUTHORIZE TRÊN SWAGGER
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'JWT',
+        description:
+          'Dán cục Access Token (Bearer) của ông vào đây để xác thực',
+        in: 'header',
+      },
+      'JWT-auth', // Cái tên key định danh (Bắt buộc phải trùng với bên Controller)
+    )
     .build();
+
   const documentFactory = () => SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, documentFactory);
 
