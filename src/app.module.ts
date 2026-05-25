@@ -17,6 +17,7 @@ import { VouchersModule } from './models/vouchers/vouchers.module';
 import { PaymentsModule } from './models/payments/payments.module';
 import { VipModule } from './models/VIP/vip.module';
 import { AuthModule } from './auth/auth.module';
+import { CartModule } from './models/carts/cart.module';
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { AuthModule } from './auth/auth.module';
     VouchersModule,
     PaymentsModule,
     VipModule,
+    CartModule,
   ],
   controllers: [AppController],
   providers: [AppService],

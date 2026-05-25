@@ -1,22 +1,30 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+﻿import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ExecutionContext } from '@nestjs/common';
+import { Request } from 'express';
+import { User } from '../../models/user/entities/user.entity';
+
+type GuardInfo = { message?: string } | string | undefined | null;
+
+interface RequestWithUser extends Request {
+  user?: User;
+}
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handleRequest(err: any, user: any, info: any, context: ExecutionContext) {
+  // 🛠️ SỬA LỖI: Biến hàm thành Generic <TUser = User> kế thừa chuẩn từ class cha
+  override handleRequest<TUser = User>(
+    err: unknown,
+    user: unknown, // Để kiểu dữ liệu unknown cho an toàn, tránh ép kiểu ngầm định bừa bãi
+    info: GuardInfo,
+    context: ExecutionContext,
+  ): TUser {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const request = (context as any).switchToHttp().getRequest();
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      const request = context.switchToHttp().getRequest<RequestWithUser>();
       const authHeader = request.headers?.authorization;
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       console.log('[JWT.AUTH.GUARD] Request details:', {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         method: request.method,
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         path: request.path,
         authHeaderPresent: !!authHeader,
       });
@@ -26,27 +34,27 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         throw err;
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       if (info) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        console.warn('[JWT.AUTH.GUARD] Authentication info:', info.message);
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        throw new UnauthorizedException(info.message || 'Unauthorized');
+        const message = typeof info === 'string' ? info : info?.message;
+        console.warn('[JWT.AUTH.GUARD] Authentication info:', message);
+        throw new UnauthorizedException(message || 'Unauthorized');
       }
 
+      // Kiểm tra thực thể user có tồn tại thực sự hay không
       if (!user) {
         console.error('[JWT.AUTH.GUARD] User not found after validation');
         throw new UnauthorizedException('Unauthorized');
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+      // Ép kiểu an toàn (Safe casting): Kiểm tra xem đối tượng có id của User hay không
+      const validatedUser = user as User;
       console.log(
         '[JWT.AUTH.GUARD] Authentication successful for user:',
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        user.id,
+        validatedUser.id,
       );
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      return user;
+
+      // Trả về đúng kiểu Generic TUser mà class cha yêu cầu
+      return user as TUser;
     } catch (error) {
       console.error('[JWT.AUTH.GUARD] Exception in handleRequest:', error);
       throw error;
