@@ -47,7 +47,7 @@ export class OrdersService {
         const { totalAmount, subtotal, discountAmount, orderItemsData } = await this.calculateOrderTotal(cartItems, voucher);
 
         // 3. Create Order
-        const order = await this.createOrder(manager, userId, addressId, voucher?.id, totalAmount, subtotal, discountAmount);
+        const order = await this.createOrder(manager, userId, addressId, voucher?.id, totalAmount);
 
 
         // 4. Create Order Items
@@ -266,16 +266,12 @@ export class OrdersService {
     userId: string,
     addressId: string,
     voucherId: string | undefined,
-    totalAmount: number,
-    subtotal: number,
-    discountAmount: number
+    totalAmount: number
   ) {
     const order = manager.create(Order, {
       userId,
       addressId,
       voucherId,
-      subtotal,
-      discountAmount,
       totalAmount,
       status: 'PENDING',
       createdAt: new Date(),

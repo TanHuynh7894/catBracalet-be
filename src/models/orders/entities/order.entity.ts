@@ -15,13 +15,7 @@ export class Order {
   @Column('uuid', { name: 'voucher_id', nullable: true })
   voucherId: string;
 
-  @Column({ name: 'subtotal', type: 'decimal', precision: 12, scale: 2, default: 0 })
-  subtotal: number;
-
-  @Column({ name: 'discount_amount', type: 'decimal', precision: 12, scale: 2, default: 0 })
-  discountAmount: number;
-
-  @Column('decimal', { name: 'total_amount', precision: 12, scale: 2 })
+  @Column('decimal', { name: 'total_amount', precision: 15, scale: 2 })
   totalAmount: number;
 
   @Column('varchar', { name: 'status', length: 50 })
