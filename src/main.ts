@@ -42,6 +42,13 @@ async function bootstrap() {
   const documentFactory = () => SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, documentFactory);
 
+  // Enable CORS to allow requests from the frontend (e.g., at 192.168.1.49)
+  app.enableCors({
+    origin: '*', // For development, allow all. You can specify ['http://192.168.1.49:5173'] later.
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+  });
+
   app
     .getHttpAdapter()
     .getInstance()
@@ -56,6 +63,6 @@ async function bootstrap() {
       return res.redirect(docsPath);
     });
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
 }
 bootstrap();

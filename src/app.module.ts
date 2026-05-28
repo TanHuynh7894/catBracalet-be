@@ -18,6 +18,7 @@ import { PaymentsModule } from './models/payments/payments.module';
 import { VipModule } from './models/VIP/vip.module';
 import { AuthModule } from './auth/auth.module';
 import { CartModule } from './models/carts/cart.module';
+import { OrdersModule } from './models/orders/orders.module';
 
 @Module({
   imports: [
@@ -72,6 +73,7 @@ import { CartModule } from './models/carts/cart.module';
     PaymentsModule,
     VipModule,
     CartModule,
+    OrdersModule,
   ],
   controllers: [AppController],
   providers: [AppService],
