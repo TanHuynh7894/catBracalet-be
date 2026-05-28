@@ -10,6 +10,8 @@ import { ProductVariant } from '../product-variants/entities/product-variant.ent
 import { Vouchers } from '../vouchers/entities/vouchers.entity';
 import { UserAddress } from '../user_address/entities/user_address.entity';
 
+import { VouchersModule } from '../vouchers/vouchers.module';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -21,8 +23,10 @@ import { UserAddress } from '../user_address/entities/user_address.entity';
       Vouchers,
       UserAddress,
     ]),
+    VouchersModule,
   ],
   controllers: [OrdersController],
+
   providers: [OrdersService],
   exports: [OrdersService],
 })
