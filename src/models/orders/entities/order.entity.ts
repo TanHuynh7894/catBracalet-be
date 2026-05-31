@@ -1,4 +1,5 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn, OneToMany } from 'typeorm';
+import { OrderItem } from './order-item.entity';
 
 @Entity('orders')
 export class Order {
@@ -14,12 +15,15 @@ export class Order {
   @Column('uuid', { name: 'voucher_id', nullable: true })
   voucherId: string;
 
-  @Column('decimal', { name: 'total_amount', precision: 10, scale: 2 })
+  @Column('decimal', { name: 'total_amount', precision: 15, scale: 2 })
   totalAmount: number;
 
   @Column('varchar', { name: 'status', length: 50 })
   status: string;
 
-  @Column('timestamp', { name: 'create_at' })
+  @Column('timestamp', { name: 'created_at' })
   createdAt: Date;
+
+  @OneToMany(() => OrderItem, (orderItem) => orderItem.order)
+  items: OrderItem[];
 }

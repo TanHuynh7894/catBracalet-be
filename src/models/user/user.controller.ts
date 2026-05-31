@@ -8,6 +8,8 @@
   Delete,
   UseGuards,
 } from '@nestjs/common';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { RolesGuard } from '../../auth/guards/roles.guard';
 import {
   ApiTags,
   ApiOperation,
@@ -36,7 +38,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 @ApiTags('User')
 @Controller('user')
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(private readonly userService: UserService) { }
 
   @Post('register')
   @ApiOperation({
@@ -208,6 +210,20 @@ export class UserController {
       userId,
       removeUserRoleDto.roleId,
     );
+  }
+
+  @Delete(':id/soft-delete')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Soft delete user (Admin)',
+    description: 'Change user status to DELETED or other status',
+  })
+  softDelete(
+    @Param('id') id: string,
+  ) {
+    return this.userService.softDelete(id);
   }
 
   @Delete(':id')
