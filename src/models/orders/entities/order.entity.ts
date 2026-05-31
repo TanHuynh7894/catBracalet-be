@@ -20,6 +20,6 @@ export class Order {
   @Column('varchar', { name: 'status', length: 50 })
   status: string;
 
-  @Column('timestamp', { name: 'create_at' })
+  @Column('timestamp', { name: 'created_at' })
   createdAt: Date;
 }
