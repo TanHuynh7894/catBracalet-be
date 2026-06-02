@@ -1,43 +1,58 @@
+import { IsString, IsNumber, IsEnum, IsInt, IsDateString, IsOptional, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateVouchersDto {
   @ApiProperty({
     example: 'SUMMER2026',
-    description: 'The code of the voucher',
+    description: 'Mã voucher',
   })
+  @IsString()
   code: string;
 
-  @ApiProperty({ example: 15.5, description: 'The discount value' })
+  @ApiProperty({ example: 15.5, description: 'Giá trị giảm' })
+  @IsNumber()
+  @Min(0)
   discountValue: number;
 
   @ApiProperty({
     example: 'PERCENT',
-    description: 'The type of discount (e.g., PERCENT, FIXED)',
+    description: 'Loại giảm giá (PERCENT hoặc FIXED)',
+    enum: ['PERCENT', 'FIXED'],
+  })
+  @IsEnum(['PERCENT', 'FIXED'], {
+    message: 'discountType phải là PERCENT hoặc FIXED',
   })
   discountType: string;
 
   @ApiProperty({
     example: 100,
-    description: 'The quantity of vouchers available',
+    description: 'Số lượng voucher',
   })
+  @IsInt()
+  @Min(0)
   quantity: number;
 
   @ApiProperty({
     example: '2026-06-01T00:00:00Z',
-    description: 'The start date of the voucher',
+    description: 'Ngày bắt đầu',
   })
-  startDate: Date;
+  @IsDateString()
+  startDate: string;
 
   @ApiProperty({
     example: '2026-06-30T23:59:59Z',
-    description: 'The end date of the voucher',
+    description: 'Ngày kết thúc',
   })
-  endDate: Date;
+  @IsDateString()
+  endDate: string;
 
   @ApiProperty({
     example: 'ACTIVE',
-    description: 'The status of the voucher',
+    description: 'Trạng thái voucher',
     required: false,
+    enum: ['ACTIVE', 'INACTIVE'],
   })
+  @IsOptional()
+  @IsEnum(['ACTIVE', 'INACTIVE'])
   status?: string;
 }

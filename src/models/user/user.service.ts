@@ -35,7 +35,7 @@ export class UserService {
 
     @InjectRepository(Role)
     private readonly roleRepository: Repository<Role>,
-  ) {}
+  ) { }
 
   /**
    * Bước 1: Đăng ký người dùng - lưu tạm thời, gửi OTP
@@ -551,6 +551,12 @@ export class UserService {
     await this.userRepository.save(user);
 
     return { message: 'Đổi mật khẩu thành công' };
+  }
+
+  async softDelete(id: string): Promise<User> {
+    const user = await this.findOne(id);
+    user.status = user.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    return this.userRepository.save(user);
   }
 
   remove(id: string) {

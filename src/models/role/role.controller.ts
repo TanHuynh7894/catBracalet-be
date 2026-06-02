@@ -7,46 +7,52 @@ import {
   Param,
   Delete,
   Query,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { RoleService } from './role.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { RemoveRoleDto } from './dto/remove-role.dto';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { Roles } from '../../auth/decorators/roles.decorator';
 
 @ApiTags('Role')
+@ApiBearerAuth('JWT-auth')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('ADMIN') // Chỉ Admin mới được quản lý Role
 @Controller('role')
 export class RoleController {
-  constructor(private readonly roleService: RoleService) {}
+  constructor(private readonly roleService: RoleService) { }
 
   @Post()
-  @ApiOperation({ summary: 'Create a new role' })
+  @ApiOperation({ summary: 'Tạo Role mới (Admin)' })
   create(@Body() createRoleDto: CreateRoleDto) {
     return this.roleService.create(createRoleDto);
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all roles' })
+  @ApiOperation({ summary: 'Lấy danh sách tất cả các Role (Admin)' })
   findAll() {
-    console.log('✅ Received GET request for /role');
     return this.roleService.findAll();
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Get role details by ID' })
-  findOne(@Param('id') id: string) {
-    return this.roleService.findOne(id);
+  @Get(':roleId')
+  @ApiOperation({ summary: 'Lấy chi tiết Role theo ID (Admin)' })
+  findOne(@Param('roleId') roleId: string) {
+    return this.roleService.findOne(roleId);
   }
 
-  @Patch(':id')
-  @ApiOperation({ summary: 'Update role information' })
-  update(@Param('id') id: string, @Body() updateRoleDto: UpdateRoleDto) {
-    return this.roleService.update(id, updateRoleDto);
+  @Patch(':roleId')
+  @ApiOperation({ summary: 'Cập nhật thông tin Role (Admin)' })
+  update(@Param('roleId') roleId: string, @Body() updateRoleDto: UpdateRoleDto) {
+    return this.roleService.update(roleId, updateRoleDto);
   }
 
-  @Delete(':id')
-  @ApiOperation({ summary: 'Remove or update role status' })
-  remove(@Param('id') id: string, @Query() removeRoleDto: RemoveRoleDto) {
-    return this.roleService.remove(id, removeRoleDto.status);
+  @Delete(':roleId')
+  @ApiOperation({ summary: 'Xóa hoặc cập nhật trạng thái Role (Admin)' })
+  remove(@Param('roleId') roleId: string, @Query() removeRoleDto: RemoveRoleDto) {
+    return this.roleService.remove(roleId, removeRoleDto.status);
   }
 }
