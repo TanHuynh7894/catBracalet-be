@@ -30,10 +30,6 @@ import {
   PaymentRedirectResponseDto,
   PaymentStatusResponseDto,
 } from './dto/payment-response.dto';
-
-class RegisterWebhookDto {
-  webhookUrl: string;
-}
 import { PaymentsService } from './payments.service';
 
 @ApiTags('Payments')
@@ -59,16 +55,58 @@ export class PaymentsController {
   @ApiOkResponse({ type: BasicSuccessResponseDto })
   async webhook(
     @Req() req: RawBodyRequest<Request>,
-    @Body() body: Record<string, unknown>,
+    @Body() body?: Record<string, unknown>,
   ) {
     console.log('=== [WEBHOOK] NHẬN ĐƯỢC YÊU CẦU TỪ PAYOS ===');
     console.log('Headers nhận được:', req.headers);
     console.log('Body nhận được:', JSON.stringify(body));
+    console.log(
+      'Raw Body Type:',
+      typeof req.rawBody,
+      'Length:',
+      req.rawBody?.length ?? 0,
+    );
+
+    // Print full rawBody as string for debugging
+    if (req.rawBody) {
+      const rawBodyStr =
+        req.rawBody instanceof Buffer
+          ? req.rawBody.toString('utf-8')
+          : String(req.rawBody);
+      console.log('[PAYOS] FULL RAW BODY STRING:');
+      console.log(rawBodyStr);
+    }
+
+    // Detect test webhook from PayOS dashboard (empty/incomplete body or missing signature)
+    const isTestWebhook =
+      !body ||
+      typeof body !== 'object' ||
+      !body.data ||
+      typeof body.data !== 'object' ||
+      !body.signature ||
+      typeof body.signature !== 'string';
+
+    if (isTestWebhook) {
+      console.log(
+        '🧪 [WEBHOOK TEST] PayOS đang kiểm tra kết nối - trả về 200 OK',
+      );
+      return { success: true, message: 'Webhook endpoint is working' };
+    }
 
     try {
-      return await this.paymentsService.handlePaymentCallback(
-        req.rawBody,
+      // Use official PayOS SDK method for verification
+      // Pass both rawBody (for signature verification) and parsed body
+      const verified = this.paymentsService.verifyPaymentWebhookWithSDK(
         body,
+        req.rawBody,
+      );
+
+      console.log('[PAYOS] Verified webhook data:', verified);
+
+      // Process the verified payment
+      return await this.paymentsService.processSuccessfulPayment(
+        verified.orderCode,
+        verified.reference,
       );
     } catch (error) {
       console.log('Raw body nhận được:', req.rawBody);
