@@ -37,23 +37,40 @@ export class PaymentRedirectResponseDto {
 }
 
 export class PaymentStatusResponseDto {
-  @ApiProperty()
+  @ApiProperty({ example: true })
   success: boolean;
 
-  @ApiProperty()
+  @ApiProperty({ example: 123456 })
   orderCode: number;
 
-  @ApiProperty()
+  @ApiProperty({
+    example: 'PENDING',
+    description: 'PAID, PENDING, CANCELLED,...',
+  })
   paymentStatus: string;
 
-  @ApiProperty({ nullable: true, type: String })
+  @ApiProperty({
+    nullable: true,
+    type: String,
+    example: '2026-06-01T12:00:00.000Z',
+  })
   paidAt: Date | null;
 
-  @ApiProperty()
+  @ApiProperty({ example: 50000 })
   amount: number;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ nullable: true, example: 'FTX123456' })
   transactionCode: string | null;
+
+  // 🌟 THÊM 2 THUỘC TÍNH NÀY để hứng data thực tế trả về từ PayOS SDK mà bạn đang map ở Service
+  @ApiProperty({ example: 0, description: 'Số tiền khách đã thanh toán' })
+  amountPaid: number;
+
+  @ApiProperty({
+    example: 50000,
+    description: 'Số tiền còn lại cần thanh toán',
+  })
+  amountRemaining: number;
 }
 
 export class PaymentDataDto {

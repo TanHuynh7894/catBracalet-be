@@ -9,7 +9,12 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiQuery, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiQuery,
+  ApiOperation,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { OrdersService } from './orders.service';
 import { CheckoutDto } from './dto/checkout.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
@@ -25,7 +30,7 @@ import { Roles } from '../../auth/decorators/roles.decorator';
 @UseGuards(JwtAuthGuard, RolesGuard) // Kích hoạt bảo vệ
 @Controller('orders')
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) { }
+  constructor(private readonly ordersService: OrdersService) {}
 
   @Post('checkout')
   @ApiOperation({ summary: 'Xử lý thanh toán đơn hàng (User)' })
@@ -45,17 +50,21 @@ export class OrdersController {
   @ApiOperation({ summary: 'Cập nhật trạng thái đơn hàng (Admin/Staff)' })
   updateStatus(
     @Param('orderId') orderId: string,
-    @Body() updateOrderStatusDto: UpdateOrderStatusDto
+    @Body() updateOrderStatusDto: UpdateOrderStatusDto,
   ) {
-    return this.ordersService.updateOrderStatus(orderId, updateOrderStatusDto.status);
+    return this.ordersService.updateOrderStatus(
+      orderId,
+      updateOrderStatusDto.status,
+    );
   }
 
   @Post()
-  @ApiOperation({ summary: 'Tạo đơn hàng mới (kèm danh sách sản phẩm từ giỏ hàng)' })
+  @ApiOperation({
+    summary: 'Tạo đơn hàng mới (kèm danh sách sản phẩm từ giỏ hàng)',
+  })
   createOrder(@Body() createOrderDto: CreateOrderDto) {
     return this.ordersService.createOrder_legacy(createOrderDto);
   }
-
 
   @Get()
   @Roles('ADMIN', 'STAFF')
@@ -65,14 +74,18 @@ export class OrdersController {
   }
 
   @Get('user/:userId')
-  @ApiOperation({ summary: 'Lấy danh sách đơn hàng của một người dùng (User/Admin)' })
+  @ApiOperation({
+    summary: 'Lấy danh sách đơn hàng của một người dùng (User/Admin)',
+  })
   getOrdersByUser(@Param('userId') userId: string) {
     return this.ordersService.getOrdersByUser(userId);
   }
 
   @Get('status/:status')
   @Roles('ADMIN', 'STAFF')
-  @ApiOperation({ summary: 'Lấy danh sách đơn hàng theo trạng thái (Admin/Staff)' })
+  @ApiOperation({
+    summary: 'Lấy danh sách đơn hàng theo trạng thái (Admin/Staff)',
+  })
   getOrdersByStatus(@Param('status') status: string) {
     return this.ordersService.getOrdersByStatus(status);
   }

@@ -30,5 +30,4 @@ import { VouchersModule } from '../vouchers/vouchers.module';
   providers: [OrdersService],
   exports: [OrdersService],
 })
-export class OrdersModule { }
-
+export class OrdersModule {}
