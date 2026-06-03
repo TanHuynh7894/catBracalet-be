@@ -1,4 +1,12 @@
-import { IsString, IsNumber, IsEnum, IsInt, IsDateString, IsOptional, Min } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsEnum,
+  IsInt,
+  IsDateString,
+  IsOptional,
+  Min,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateVouchersDto {

@@ -1,53 +1,102 @@
 import {
+  Body,
   Controller,
   Get,
-  Post,
-  Body,
-  Patch,
+  HttpCode,
+  HttpStatus,
   Param,
-  Delete,
+  Post,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+} from '@nestjs/swagger';
+import { Public } from '../../auth/decorators/public.decorator';
+import { CreatePayosPaymentDto } from './dto/create-payos-payment.dto';
+import {
+  BasicSuccessResponseDto,
+  CreatePaymentResponseDto,
+  PaymentInfoResponseDto,
+  PaymentStatusResponseDto,
+} from './dto/payment-response.dto';
+import { PayOSWebhookDto } from './dto/payos-webhook.dto';
 import { PaymentsService } from './payments.service';
-import { CreatePaymentsDto } from './dto/create-payments.dto';
-import { UpdatePaymentsDto } from './dto/update-payments.dto';
-import { RemovePaymentsDto } from './dto/remove-payments.dto';
 
 @ApiTags('Payments')
-@Controller('payments')
+@ApiBearerAuth('JWT-auth') // 🌟 THÊM DÒNG NÀY: Kích hoạt ổ khóa bảo mật cho toàn bộ Route trong Controller này
+@Controller('api/payment')
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
-  @Post()
-  create(@Body() createPaymentsDto: CreatePaymentsDto) {
-    return this.paymentsService.create(createPaymentsDto);
+  @Post('create')
+  @ApiOperation({ summary: 'Create PayOS payment link' })
+  @ApiBody({ type: CreatePayosPaymentDto })
+  @ApiCreatedResponse({ type: CreatePaymentResponseDto })
+  create(@Body() body: CreatePayosPaymentDto) {
+    return this.paymentsService.createOSPayment(body.orderId);
   }
 
-  @Get()
-  findAll() {
-    return this.paymentsService.findAll();
+  @Public() // 💡 Route này là Webhook từ cổng PayOS gọi về nên ông đã để Public, không lo bị chặn bởi khóa
+  @Post('webhook')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Receive and process PayOS webhook callback (Public)',
+  })
+  @ApiBody({
+    type: PayOSWebhookDto,
+    description: 'Dữ liệu Webhook mẫu từ PayOS hoặc Swagger test',
+  })
+  @ApiOkResponse({ type: BasicSuccessResponseDto })
+  async webhook(@Body() body: Record<string, unknown>) {
+    console.log('[PAYOS] Webhook received body:', JSON.stringify(body));
+
+    if (
+      !body ||
+      Object.keys(body).length === 0 ||
+      body.desc === 'schema_confirm' ||
+      body.confirm === true
+    ) {
+      console.log(
+        '[PAYOS] URL Validation or empty test request detected. Responding OK.',
+      );
+      return { success: true, message: 'Webhook URL validated successfully' };
+    }
+
+    return this.paymentsService.handlePaymentCallback(body);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.paymentsService.findOne(id);
+  @Get('status/:orderCode')
+  @ApiOperation({ summary: 'Get payment status directly from PayOS SDK' })
+  @ApiParam({
+    name: 'orderCode',
+    type: 'number',
+    example: 123456,
+    description:
+      'Mã số orderCode cần kiểm tra trạng thái trực tiếp trên cổng PayOS',
+  })
+  @ApiOkResponse({
+    type: PaymentStatusResponseDto,
+    description: 'Trạng thái đơn hàng real-time từ cổng thanh toán PayOS',
+  })
+  getPaymentStatus(@Param('orderCode') orderCode: string) {
+    return this.paymentsService.getPaymentStatus(Number(orderCode));
   }
 
-  @Patch(':id')
-  update(
-    @Param('id') id: string,
-    @Body() updatePaymentsDto: UpdatePaymentsDto,
-  ) {
-    return this.paymentsService.update(id, updatePaymentsDto);
-  }
-
-  @Delete('remove')
-  removeWithDto(@Body() removePaymentsDto: RemovePaymentsDto) {
-    return this.paymentsService.remove(removePaymentsDto.paymentId);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.paymentsService.remove(id);
+  @Get('info/:orderCode')
+  @ApiOperation({ summary: 'Get payment information by orderCode' })
+  @ApiParam({
+    name: 'orderCode',
+    type: 'number',
+    example: 123456,
+    description: 'Mã số orderCode của đơn hàng trong Database nội bộ',
+  })
+  @ApiOkResponse({ type: PaymentInfoResponseDto })
+  getInformationPayment(@Param('orderCode') orderCode: string) {
+    return this.paymentsService.getInformationPayment(Number(orderCode));
   }
 }

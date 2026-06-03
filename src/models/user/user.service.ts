@@ -35,7 +35,7 @@ export class UserService {
 
     @InjectRepository(Role)
     private readonly roleRepository: Repository<Role>,
-  ) { }
+  ) {}
 
   /**
    * Bước 1: Đăng ký người dùng - lưu tạm thời, gửi OTP

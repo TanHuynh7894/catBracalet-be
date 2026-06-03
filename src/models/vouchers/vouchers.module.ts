@@ -10,5 +10,4 @@ import { Vouchers } from './entities/vouchers.entity';
   providers: [VouchersService],
   exports: [VouchersService],
 })
-export class VouchersModule { }
-
+export class VouchersModule {}

@@ -38,7 +38,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 @ApiTags('User')
 @Controller('user')
 export class UserController {
-  constructor(private readonly userService: UserService) { }
+  constructor(private readonly userService: UserService) {}
 
   @Post('register')
   @ApiOperation({
@@ -220,9 +220,7 @@ export class UserController {
     summary: 'Soft delete user (Admin)',
     description: 'Change user status to DELETED or other status',
   })
-  softDelete(
-    @Param('id') id: string,
-  ) {
+  softDelete(@Param('id') id: string) {
     return this.userService.softDelete(id);
   }
 
