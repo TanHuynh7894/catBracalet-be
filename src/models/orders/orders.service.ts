@@ -88,7 +88,15 @@ export class OrdersService {
 
         return await manager.findOne(Order, {
           where: { id: order.id },
-          relations: ['items'],
+          relations: [
+            'user',
+            'address',
+            'voucher',
+            'items',
+            'items.variant',
+            'items.variant.productVariantMappings',
+            'items.variant.productVariantMappings.product',
+          ],
         });
       } catch (error) {
         throw error;
@@ -438,13 +446,35 @@ export class OrdersService {
   }
 
   findAll() {
-    return this.orderRepository.find();
+    return this.orderRepository.find({
+      relations: [
+        'user',
+        'address',
+        'voucher',
+        'items',
+        'items.variant',
+        'items.variant.productVariantMappings',
+        'items.variant.productVariantMappings.product',
+      ],
+    });
   }
 
   async getOrderById(id: string) {
     const order = await this.orderRepository.findOne({
       where: { id },
+<<<<<<< HEAD
       relations: ['items'],
+=======
+      relations: [
+        'user',
+        'address',
+        'voucher',
+        'items',
+        'items.variant',
+        'items.variant.productVariantMappings',
+        'items.variant.productVariantMappings.product',
+      ],
+>>>>>>> 36e852cf78124a91f227fd5c1899d8891fa29875
     });
     if (!order) {
       throw new NotFoundException(`Order with id ${id} not found`);
@@ -455,18 +485,47 @@ export class OrdersService {
   async getOrdersByUser(userId: string) {
     return this.orderRepository.find({
       where: { userId },
+      relations: [
+        'user',
+        'address',
+        'voucher',
+        'items',
+        'items.variant',
+        'items.variant.productVariantMappings',
+        'items.variant.productVariantMappings.product',
+      ],
     });
   }
 
   async getOrdersByStatus(status: string) {
     return this.orderRepository.find({
       where: { status },
+      relations: [
+        'user',
+        'address',
+        'voucher',
+        'items',
+        'items.variant',
+        'items.variant.productVariantMappings',
+        'items.variant.productVariantMappings.product',
+      ],
     });
   }
 
   async getOrdersByTime(startDate: Date, endDate: Date) {
+<<<<<<< HEAD
     return this.orderRepository
       .createQueryBuilder('order')
+=======
+    return this.orderRepository.createQueryBuilder('order')
+      .leftJoinAndSelect('order.user', 'user')
+      .leftJoinAndSelect('order.address', 'address')
+      .leftJoinAndSelect('order.voucher', 'voucher')
+      .leftJoinAndSelect('order.items', 'items')
+      .leftJoinAndSelect('items.variant', 'variant')
+      .leftJoinAndSelect('variant.productVariantMappings', 'mappings')
+      .leftJoinAndSelect('mappings.product', 'product')
+>>>>>>> 36e852cf78124a91f227fd5c1899d8891fa29875
       .where('order.createdAt BETWEEN :start AND :end', {
         start: startDate,
         end: endDate,
