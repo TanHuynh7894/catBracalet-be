@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, EntityManager, In } from 'typeorm';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -32,30 +36,48 @@ export class OrdersService {
     private readonly addressRepository: Repository<UserAddress>,
     private readonly vouchersService: VouchersService,
     private readonly dataSource: DataSource,
-  ) { }
+  ) {}
 
   /**
    * Main checkout handler with transaction support
    */
-  async handleCheckout(userId: string, addressId: string, voucherCode?: string) {
+  async handleCheckout(
+    userId: string,
+    addressId: string,
+    voucherCode?: string,
+  ) {
     return await this.dataSource.transaction(async (manager: EntityManager) => {
       try {
         // 1. Validate checkout conditions
-        const { cartItems, voucher, address } = await this.validateCheckout(manager, userId, addressId, voucherCode);
+        const { cartItems, voucher, address } = await this.validateCheckout(
+          manager,
+          userId,
+          addressId,
+          voucherCode,
+        );
 
         // 2. Calculate order total and prepare item data
-        const { totalAmount, subtotal, discountAmount, orderItemsData } = await this.calculateOrderTotal(cartItems, voucher);
+        const { totalAmount, subtotal, discountAmount, orderItemsData } =
+          await this.calculateOrderTotal(cartItems, voucher);
 
         // 3. Create Order
-        const order = await this.createOrder(manager, userId, addressId, voucher?.id, totalAmount);
-
+        const order = await this.createOrder(
+          manager,
+          userId,
+          addressId,
+          voucher?.id,
+          totalAmount,
+        );
 
         // 4. Create Order Items
         await this.createOrderItems(manager, order.id, orderItemsData);
 
         // 5. Apply Voucher (Reduce voucher quantity) - Gọi qua VoucherService
         if (voucher) {
-          await this.vouchersService.decrementVoucherQuantity(voucher.id, manager);
+          await this.vouchersService.decrementVoucherQuantity(
+            voucher.id,
+            manager,
+          );
         }
 
         // 6. Deduct Stock from product variants
@@ -66,7 +88,15 @@ export class OrdersService {
 
         return await manager.findOne(Order, {
           where: { id: order.id },
-          relations: ['items'],
+          relations: [
+            'user',
+            'address',
+            'voucher',
+            'items',
+            'items.variant',
+            'items.variant.productVariantMappings',
+            'items.variant.productVariantMappings.product',
+          ],
         });
       } catch (error) {
         throw error;
@@ -155,7 +185,10 @@ export class OrdersService {
   /**
    * Helper: Validate logic chuyển đổi status
    */
-  private validateOrderStatusTransition(currentStatus: string, nextStatus: string) {
+  private validateOrderStatusTransition(
+    currentStatus: string,
+    nextStatus: string,
+  ) {
     const validTransitions = {
       PENDING: ['CONFIRMED', 'CANCELLED'],
       CONFIRMED: ['SHIPPING', 'CANCELLED'],
@@ -165,7 +198,9 @@ export class OrdersService {
     };
 
     if (currentStatus === nextStatus) {
-      throw new BadRequestException('Trạng thái mới trùng với trạng thái hiện tại');
+      throw new BadRequestException(
+        'Trạng thái mới trùng với trạng thái hiện tại',
+      );
     }
 
     const allowed = validTransitions[currentStatus] || [];
@@ -186,13 +221,23 @@ export class OrdersService {
   /**
    * Validate cart, stock, variants, voucher, and address
    */
-  private async validateCheckout(manager: EntityManager, userId: string, addressId: string, voucherCode?: string) {
+  private async validateCheckout(
+    manager: EntityManager,
+    userId: string,
+    addressId: string,
+    voucherCode?: string,
+  ) {
     const cart = await manager.findOne(Cart, { where: { userId } });
-    if (!cart) throw new NotFoundException('Không tìm thấy giỏ hàng cho người dùng này');
+    if (!cart)
+      throw new NotFoundException('Không tìm thấy giỏ hàng cho người dùng này');
 
     const cartItems = await manager.find(CartItem, {
       where: { cartId: cart.id },
-      relations: ['variant', 'variant.productVariantMappings', 'variant.productVariantMappings.product'],
+      relations: [
+        'variant',
+        'variant.productVariantMappings',
+        'variant.productVariantMappings.product',
+      ],
     });
 
     if (!cartItems.length) {
@@ -201,25 +246,38 @@ export class OrdersService {
 
     for (const item of cartItems) {
       if (!item.variant) {
-        throw new NotFoundException(`Biến thể sản phẩm với ID ${item.variantId} không tồn tại`);
+        throw new NotFoundException(
+          `Biến thể sản phẩm với ID ${item.variantId} không tồn tại`,
+        );
       }
       if (item.variant.stockQuantity < item.quantity) {
-        throw new BadRequestException(`Sản phẩm ${item.variant.sku} không đủ tồn kho (Cần: ${item.quantity}, Hiện có: ${item.variant.stockQuantity})`);
+        throw new BadRequestException(
+          `Sản phẩm ${item.variant.sku} không đủ tồn kho (Cần: ${item.quantity}, Hiện có: ${item.variant.stockQuantity})`,
+        );
       }
       if (item.variant.status !== 'ACTIVE') {
-        throw new BadRequestException(`Sản phẩm ${item.variant.sku} hiện không khả dụng`);
+        throw new BadRequestException(
+          `Sản phẩm ${item.variant.sku} hiện không khả dụng`,
+        );
       }
     }
 
-    const address = await manager.findOne(UserAddress, { where: { id: addressId, userId } });
+    const address = await manager.findOne(UserAddress, {
+      where: { id: addressId, userId },
+    });
     if (!address) {
-      throw new NotFoundException('Địa chỉ giao hàng không hợp lệ cho người dùng này');
+      throw new NotFoundException(
+        'Địa chỉ giao hàng không hợp lệ cho người dùng này',
+      );
     }
 
     // Validate Voucher qua VoucherService
     let voucher: Vouchers | null = null;
     if (voucherCode) {
-      voucher = await this.vouchersService.validateVoucher(voucherCode, manager);
+      voucher = await this.vouchersService.validateVoucher(
+        voucherCode,
+        manager,
+      );
     }
 
     return { cartItems, voucher, address };
@@ -231,7 +289,9 @@ export class OrdersService {
   private async calculateOrderTotal(cartItems: CartItem[], voucher?: Vouchers) {
     let subtotal = 0;
     const orderItemsData = cartItems.map((item) => {
-      const basePrice = Number(item.variant.productVariantMappings?.[0]?.product?.basePrice || 0);
+      const basePrice = Number(
+        item.variant.productVariantMappings?.[0]?.product?.basePrice || 0,
+      );
       const extraPrice = Number(item.variant.extraPrice || 0);
       const unitPrice = basePrice + extraPrice;
       const totalPrice = unitPrice * item.quantity;
@@ -251,7 +311,10 @@ export class OrdersService {
 
     // Tính toán discount qua VoucherService
     if (voucher) {
-      discountAmount = this.vouchersService.calculateVoucherDiscount(subtotal, voucher);
+      discountAmount = this.vouchersService.calculateVoucherDiscount(
+        subtotal,
+        voucher,
+      );
       totalAmount = subtotal - discountAmount;
     }
 
@@ -266,7 +329,7 @@ export class OrdersService {
     userId: string,
     addressId: string,
     voucherId: string | undefined,
-    totalAmount: number
+    totalAmount: number,
   ) {
     const order = manager.create(Order, {
       userId,
@@ -282,7 +345,11 @@ export class OrdersService {
   /**
    * Create order items from calculated data
    */
-  private async createOrderItems(manager: EntityManager, orderId: string, itemsData: any[]) {
+  private async createOrderItems(
+    manager: EntityManager,
+    orderId: string,
+    itemsData: any[],
+  ) {
     const orderItems = itemsData.map((item) =>
       manager.create(OrderItem, {
         orderId,
@@ -300,7 +367,12 @@ export class OrdersService {
    */
   private async deductStock(manager: EntityManager, cartItems: CartItem[]) {
     for (const item of cartItems) {
-      await manager.decrement(ProductVariant, { id: item.variantId }, 'stockQuantity', item.quantity);
+      await manager.decrement(
+        ProductVariant,
+        { id: item.variantId },
+        'stockQuantity',
+        item.quantity,
+      );
     }
   }
 
@@ -328,11 +400,11 @@ export class OrdersService {
     const savedOrder = await this.orderRepository.save(newOrder);
 
     if (items && items.length > 0) {
-      const orderItems = items.map(item => {
+      const orderItems = items.map((item) => {
         return this.orderItemRepository.create({
           ...item,
           orderId: savedOrder.id,
-          totalPrice: item.unitPrice * item.quantity
+          totalPrice: item.unitPrice * item.quantity,
         });
       });
       await this.orderItemRepository.save(orderItems);
@@ -363,22 +435,46 @@ export class OrdersService {
       where: { orderId },
     });
 
-    const totalAmount = items.reduce((sum, item) => sum + Number(item.totalPrice), 0);
+    const totalAmount = items.reduce(
+      (sum, item) => sum + Number(item.totalPrice),
+      0,
+    );
 
     await this.orderRepository.update(orderId, { totalAmount });
 
     return totalAmount;
   }
 
-
   findAll() {
-    return this.orderRepository.find();
+    return this.orderRepository.find({
+      relations: [
+        'user',
+        'address',
+        'voucher',
+        'items',
+        'items.variant',
+        'items.variant.productVariantMappings',
+        'items.variant.productVariantMappings.product',
+      ],
+    });
   }
 
   async getOrderById(id: string) {
     const order = await this.orderRepository.findOne({
       where: { id },
-      relations: ['items']
+<<<<<<< HEAD
+      relations: ['items'],
+=======
+      relations: [
+        'user',
+        'address',
+        'voucher',
+        'items',
+        'items.variant',
+        'items.variant.productVariantMappings',
+        'items.variant.productVariantMappings.product',
+      ],
+>>>>>>> 36e852cf78124a91f227fd5c1899d8891fa29875
     });
     if (!order) {
       throw new NotFoundException(`Order with id ${id} not found`);
@@ -389,20 +485,50 @@ export class OrdersService {
   async getOrdersByUser(userId: string) {
     return this.orderRepository.find({
       where: { userId },
+      relations: [
+        'user',
+        'address',
+        'voucher',
+        'items',
+        'items.variant',
+        'items.variant.productVariantMappings',
+        'items.variant.productVariantMappings.product',
+      ],
     });
   }
 
   async getOrdersByStatus(status: string) {
     return this.orderRepository.find({
       where: { status },
+      relations: [
+        'user',
+        'address',
+        'voucher',
+        'items',
+        'items.variant',
+        'items.variant.productVariantMappings',
+        'items.variant.productVariantMappings.product',
+      ],
     });
   }
 
   async getOrdersByTime(startDate: Date, endDate: Date) {
+<<<<<<< HEAD
+    return this.orderRepository
+      .createQueryBuilder('order')
+=======
     return this.orderRepository.createQueryBuilder('order')
+      .leftJoinAndSelect('order.user', 'user')
+      .leftJoinAndSelect('order.address', 'address')
+      .leftJoinAndSelect('order.voucher', 'voucher')
+      .leftJoinAndSelect('order.items', 'items')
+      .leftJoinAndSelect('items.variant', 'variant')
+      .leftJoinAndSelect('variant.productVariantMappings', 'mappings')
+      .leftJoinAndSelect('mappings.product', 'product')
+>>>>>>> 36e852cf78124a91f227fd5c1899d8891fa29875
       .where('order.createdAt BETWEEN :start AND :end', {
         start: startDate,
-        end: endDate
+        end: endDate,
       })
       .getMany();
   }
