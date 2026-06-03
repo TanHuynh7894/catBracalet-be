@@ -6,6 +6,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Order } from './order.entity';
+import { ProductVariant } from '../../product-variants/entities/product-variant.entity';
 
 @Entity('order_items')
 export class OrderItem {
@@ -17,6 +18,10 @@ export class OrderItem {
 
   @Column('uuid', { name: 'variant_id' })
   variantId: string;
+
+  @ManyToOne(() => ProductVariant)
+  @JoinColumn({ name: 'variant_id' })
+  variant: ProductVariant;
 
   @Column('int', { name: 'quantity' })
   quantity: number;
