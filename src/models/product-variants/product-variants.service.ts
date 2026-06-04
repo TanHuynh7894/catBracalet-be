@@ -50,8 +50,10 @@ export class ProductVariantsService {
         productVariantMappings: {
           product: {
             category: true,
-            material: true,
             productImages: true,
+            product_materials: {
+              material: true,
+            },
           },
         },
       },
@@ -87,7 +89,8 @@ export class ProductVariantsService {
       .leftJoinAndSelect('variant.productVariantMappings', 'mapping')
       .leftJoinAndSelect('mapping.product', 'product')
       .leftJoinAndSelect('product.category', 'category')
-      .leftJoinAndSelect('product.material', 'material')
+      .leftJoinAndSelect('product.product_materials', 'product_material')
+      .leftJoinAndSelect('product_material.material', 'material')
       .leftJoinAndSelect('product.productImages', 'productImage')
       .where('variant.status = :variantStatus', {
         variantStatus: ProductVariantStatus.ACTIVE,
@@ -193,7 +196,8 @@ export class ProductVariantsService {
       .leftJoinAndSelect('variant.productVariantMappings', 'mapping')
       .leftJoinAndSelect('mapping.product', 'product')
       .leftJoinAndSelect('product.category', 'category')
-      .leftJoinAndSelect('product.material', 'material')
+      .leftJoinAndSelect('product.product_materials', 'product_material')
+      .leftJoinAndSelect('product_material.material', 'material')
       .leftJoinAndSelect('product.productImages', 'productImage')
       .where('product.productName ILIKE :keyword', {
         keyword: `%${keyword}%`,
@@ -212,8 +216,10 @@ export class ProductVariantsService {
         productVariantMappings: {
           product: {
             category: true,
-            material: true,
             productImages: true,
+            product_materials: {
+              material: true,
+            },
           },
         },
       },

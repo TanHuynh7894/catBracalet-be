@@ -60,7 +60,10 @@ export class ProductVariantMappingsService {
       relations: {
         product: {
           category: true,
-          material: true,
+          // 🟢 ĐÃ SỬA: Đi qua bảng trung gian product_materials để lấy thông tin material
+          product_materials: {
+            material: true,
+          },
         },
         variant: true,
       },
@@ -76,7 +79,10 @@ export class ProductVariantMappingsService {
       relations: {
         product: {
           category: true,
-          material: true,
+          // 🟢 ĐÃ SỬA: Đi qua bảng trung gian product_materials để lấy thông tin material
+          product_materials: {
+            material: true,
+          },
         },
         variant: true,
       },
