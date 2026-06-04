@@ -462,9 +462,6 @@ export class OrdersService {
   async getOrderById(id: string) {
     const order = await this.orderRepository.findOne({
       where: { id },
-<<<<<<< HEAD
-      relations: ['items'],
-=======
       relations: [
         'user',
         'address',
@@ -474,7 +471,6 @@ export class OrdersService {
         'items.variant.productVariantMappings',
         'items.variant.productVariantMappings.product',
       ],
->>>>>>> 36e852cf78124a91f227fd5c1899d8891fa29875
     });
     if (!order) {
       throw new NotFoundException(`Order with id ${id} not found`);
@@ -513,10 +509,6 @@ export class OrdersService {
   }
 
   async getOrdersByTime(startDate: Date, endDate: Date) {
-<<<<<<< HEAD
-    return this.orderRepository
-      .createQueryBuilder('order')
-=======
     return this.orderRepository.createQueryBuilder('order')
       .leftJoinAndSelect('order.user', 'user')
       .leftJoinAndSelect('order.address', 'address')
@@ -525,7 +517,6 @@ export class OrdersService {
       .leftJoinAndSelect('items.variant', 'variant')
       .leftJoinAndSelect('variant.productVariantMappings', 'mappings')
       .leftJoinAndSelect('mappings.product', 'product')
->>>>>>> 36e852cf78124a91f227fd5c1899d8891fa29875
       .where('order.createdAt BETWEEN :start AND :end', {
         start: startDate,
         end: endDate,

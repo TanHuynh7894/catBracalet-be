@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsArray,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -25,12 +26,17 @@ export class CreateProductDto {
   categoryId?: string;
 
   @ApiPropertyOptional({
-    description: 'The material UUID of the product',
-    example: '8fe51f4d-e889-4fda-86ad-d1d3cae6d6a9',
+    description: 'The list of material UUIDs associated with the product',
+    example: [
+      '8fe51f4d-e889-4fda-86ad-d1d3cae6d6a9',
+      'c39b8214-41d3-4a1e-8f55-123456789abc'
+    ],
+    type: [String], // Khai báo kiểu mảng string cho Swagger nhận diện
   })
   @IsOptional()
-  @IsUUID()
-  materialId?: string;
+  @IsArray({ message: 'materialIds phải là một mảng danh sách!' })
+  @IsUUID('all', { each: true, message: 'Mỗi kí tự trong mảng phải là định dạng UUID hợp lệ!' })
+  materialIds?: string[];
 
   @ApiProperty({
     description: 'The name of the product',
