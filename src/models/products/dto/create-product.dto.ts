@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsArray,
@@ -31,11 +31,36 @@ export class CreateProductDto {
       '8fe51f4d-e889-4fda-86ad-d1d3cae6d6a9',
       'c39b8214-41d3-4a1e-8f55-123456789abc'
     ],
-    type: [String], // Khai báo kiểu mảng string cho Swagger nhận diện
+    type: [String],
+  })
+  // 🟢 QUAN TRỌNG: Đặt @Transform lên đầu tiên để nó chuyển chuỗi từ form-data thành Mảng TRƯỚC khi validate
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return undefined;
+
+    // Trường hợp gửi JSON string từ Postman hoặc Frontend: '["uuid-1", "uuid-2"]'
+    if (typeof value === 'string' && value.trim().startsWith('[') && value.trim().endsWith(']')) {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return [];
+      }
+    }
+
+    // Trường hợp gửi chuỗi cách nhau bằng dấu phẩy: "uuid-1,uuid-2"
+    if (typeof value === 'string' && value.includes(',')) {
+      return value.split(',').map((id) => id.trim());
+    }
+
+    // Trường hợp chỉ gửi đúng 1 chuỗi UUID đơn lẻ từ form-data: "uuid-1"
+    if (typeof value === 'string') {
+      return [value.trim()];
+    }
+
+    return value;
   })
   @IsOptional()
   @IsArray({ message: 'materialIds phải là một mảng danh sách!' })
-  @IsUUID('all', { each: true, message: 'Mỗi kí tự trong mảng phải là định dạng UUID hợp lệ!' })
+  @IsUUID('all', { each: true, message: 'Mỗi phần tử trong mảng phải là định dạng UUID hợp lệ!' })
   materialIds?: string[];
 
   @ApiProperty({
@@ -65,11 +90,19 @@ export class CreateProductDto {
   basePrice: number;
 
   @ApiPropertyOptional({
-    description: 'The thumbnail URL of the product',
-    example: 'https://example.com/images/cat-bracelet.jpg',
+    type: 'string',
+    format: 'binary', // Kích hoạt nút "Chọn tệp" trên UI Swagger
+    description: 'Ảnh đại diện của sản phẩm (Upload tệp ảnh)',
   })
   @IsOptional()
+  // Đã chuyển sang any để tránh bị IsString ngăn cản dữ liệu nhị phân (binary) từ Multer
+  thumbnail?: any;
+
+  @ApiProperty({
+    description: 'Loại upload dữ liệu (P: Product, A: Avatar)',
+    example: 'P',
+  })
   @IsString()
-  @MaxLength(500)
-  thumbnail?: string;
+  @IsNotEmpty()
+  type: string;
 }

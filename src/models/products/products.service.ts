@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
 
 import { CreateProductDto, ProductStatus } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -19,7 +20,35 @@ export class ProductsService {
 
     @InjectRepository(ProductMaterial)
     private readonly productMaterialRepository: Repository<ProductMaterial>,
+
+    // Inject ConfigService để lấy giá trị biến môi trường (.env)
+    private readonly configService: ConfigService,
   ) {}
+
+  /**
+   * Helper function xuất ra: URL_BASE_BE + THUMBNAIL GỐC
+   */
+  private formatProductImageUrl(product: Product): Product {
+    if (product && product.thumbnail) {
+      // Đọc trực tiếp từ configService mỗi khi hàm chạy để đảm bảo không bị cache chuỗi rỗng
+      const baseUrl = this.configService.get<string>('URL_BASE_BE') || 'http://localhost:3000';
+      
+      console.log('--- LOG DEBUG ---');
+      console.log('KEY URL_BASE_BE ĐỌC ĐƯỢC:', baseUrl);
+      console.log('THUMBNAIL GỐC TRONG DB:', product.thumbnail);
+
+      // Làm sạch các dấu gạch chéo dư thừa trước khi nối chuỗi
+      const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+      const cleanThumbnail = product.thumbnail.startsWith('/') ? product.thumbnail : `/${product.thumbnail}`;
+
+      // Gán đè kết quả nối chuỗi trực tiếp
+      product.thumbnail = `${cleanBaseUrl}${cleanThumbnail}`;
+      
+      console.log('KẾT QUẢ SAU KHI NỐI URL:', product.thumbnail);
+      console.log('-----------------');
+    }
+    return product;
+  }
 
   async create(createProductDto: CreateProductDto): Promise<Product> {
     const { materialIds, ...productData } = createProductDto;
@@ -45,19 +74,21 @@ export class ProductsService {
   }
 
   async findAll(): Promise<Product[]> {
-    return await this.productRepository.find({
+    const products = await this.productRepository.find({
       relations: ['product_materials', 'product_materials.material'],
     });
+
+    return products.map((product) => this.formatProductImageUrl(product));
   }
 
   async findByName(name: string): Promise<Product[]> {
-    const keyword = name.trim();
+    const keyword = name?.trim();
 
     if (!keyword) {
       return [];
     }
 
-    return await this.productRepository.find({
+    const products = await this.productRepository.find({
       where: {
         productName: ILike(`%${keyword}%`),
       },
@@ -66,6 +97,8 @@ export class ProductsService {
       },
       relations: ['product_materials', 'product_materials.material'],
     });
+
+    return products.map((product) => this.formatProductImageUrl(product));
   }
 
   async findOne(id: string): Promise<Product> {
@@ -78,20 +111,24 @@ export class ProductsService {
       throw new NotFoundException(`Product with id ${id} not found`);
     }
 
-    return product;
+    return this.formatProductImageUrl(product);
   }
 
   async update(
     id: string,
     updateProductDto: UpdateProductDto,
   ): Promise<Product> {
-    const product = await this.findOne(id);
+    const product = await this.productRepository.findOne({ where: { id } });
+
+    if (!product) {
+      throw new NotFoundException(`Product with id ${id} not found`);
+    }
 
     if ('status' in updateProductDto) {
       throw new BadRequestException('Status cannot be updated in this API');
     }
 
-    const { materialIds, ...productData } = updateProductDto as any;
+    const { materialIds, ...productData } = updateProductDto;
 
     this.productRepository.merge(product, productData);
     await this.productRepository.save(product);
@@ -114,15 +151,24 @@ export class ProductsService {
   }
 
   async softDelete(id: string): Promise<Product> {
-    const product = await this.findOne(id);
+    const product = await this.productRepository.findOne({ where: { id } });
+    
+    if (!product) {
+      throw new NotFoundException(`Product with id ${id} not found`);
+    }
 
     product.status = ProductStatus.INACTIVE;
-
-    return await this.productRepository.save(product);
+    const savedProduct = await this.productRepository.save(product);
+    
+    return this.findOne(savedProduct.id);
   }
 
   async remove(id: string): Promise<void> {
-    const product = await this.findOne(id);
+    const product = await this.productRepository.findOne({ where: { id } });
+
+    if (!product) {
+      throw new NotFoundException(`Product with id ${id} not found`);
+    }
 
     await this.productRepository.remove(product);
   }
