@@ -8,7 +8,9 @@ import { join } from 'path';
 import { TypeOrmExceptionFilter } from './helpers/typeorm-exception.filter';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

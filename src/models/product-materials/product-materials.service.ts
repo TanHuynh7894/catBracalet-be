@@ -11,11 +11,11 @@ export class ProductMaterialsService {
     private readonly productMaterialRepository: Repository<ProductMaterial>,
   ) {}
 
-  // 1. Tạo liên kết mới (Gán vật liệu cho sản phẩm)
+
   async create(createProductMaterialDto: CreateProductMaterialDto) {
     const { product_id, material_id } = createProductMaterialDto;
 
-    // Kiểm tra xem mối quan hệ này đã tồn tại trong DB chưa
+
     const isExist = await this.productMaterialRepository.findOne({
       where: { product_id, material_id },
     });
@@ -28,14 +28,14 @@ export class ProductMaterialsService {
     return await this.productMaterialRepository.save(newMapping);
   }
 
-  // 2. Lấy toàn bộ danh sách liên kết trong hệ thống
+
   async findAll() {
     return await this.productMaterialRepository.find({
-      relations: ['product', 'material'], // Lấy kèm thông tin chi tiết của cả sản phẩm và vật liệu
+      relations: ['product', 'material'], 
     });
   }
 
-  // 3. Tìm một liên kết cụ thể dựa vào cặp ID
+
   async findOne(product_id: string, material_id: string) {
     const relation = await this.productMaterialRepository.findOne({
       where: { product_id, material_id },
@@ -49,7 +49,7 @@ export class ProductMaterialsService {
     return relation;
   }
 
-  // 4. Xóa liên kết (Bỏ gán vật liệu khỏi sản phẩm)
+
   async remove(product_id: string, material_id: string) {
     const result = await this.productMaterialRepository.delete({ product_id, material_id });
     

@@ -1,6 +1,16 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, EntityManager, Between, MoreThan, LessThanOrEqual } from 'typeorm';
+import {
+  Repository,
+  EntityManager,
+  Between,
+  MoreThan,
+  LessThanOrEqual,
+} from 'typeorm';
 import { CreateVouchersDto } from './dto/create-vouchers.dto';
 import { UpdateVouchersDto } from './dto/update-vouchers.dto';
 import { Vouchers } from './entities/vouchers.entity';
@@ -10,22 +20,28 @@ export class VouchersService {
   constructor(
     @InjectRepository(Vouchers)
     private readonly vouchersRepository: Repository<Vouchers>,
-  ) { }
+  ) {}
 
   /**
    * 1. Validate Voucher (Trạng thái, số lượng, ngày hạn)
    */
   async validateVoucher(code: string, manager?: EntityManager) {
-    const repo = manager ? manager.getRepository(Vouchers) : this.vouchersRepository;
+    const repo = manager
+      ? manager.getRepository(Vouchers)
+      : this.vouchersRepository;
     const voucher = await repo.findOne({ where: { code, status: 'ACTIVE' } });
 
     if (!voucher) {
-      throw new BadRequestException('Mã giảm giá không tồn tại hoặc đã bị vô hiệu hóa');
+      throw new BadRequestException(
+        'Mã giảm giá không tồn tại hoặc đã bị vô hiệu hóa',
+      );
     }
 
     const now = new Date();
     if (now < voucher.startDate || now > voucher.endDate) {
-      throw new BadRequestException('Mã giảm giá đã hết hạn hoặc chưa đến thời gian sử dụng');
+      throw new BadRequestException(
+        'Mã giảm giá đã hết hạn hoặc chưa đến thời gian sử dụng',
+      );
     }
 
     if (voucher.quantity <= 0) {
@@ -113,7 +129,7 @@ export class VouchersService {
     return this.vouchersRepository.find({
       where: [
         { startDate: Between(start, end) },
-        { endDate: Between(start, end) }
+        { endDate: Between(start, end) },
       ],
     });
   }
