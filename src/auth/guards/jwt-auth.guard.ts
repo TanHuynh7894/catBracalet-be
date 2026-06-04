@@ -31,10 +31,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     return super.canActivate(context);
   }
 
-  // 🛠️ SỬA LỖI: Biến hàm thành Generic <TUser = User> kế thừa chuẩn từ class cha
   override handleRequest<TUser = User>(
     err: unknown,
-    user: unknown, // Để kiểu dữ liệu unknown cho an toàn, tránh ép kiểu ngầm định bừa bãi
+    user: unknown,
     info: GuardInfo,
     context: ExecutionContext,
   ): TUser {
@@ -48,31 +47,31 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
         authHeaderPresent: !!authHeader,
       });
 
+      // 1. Nếu có lỗi hệ thống hoặc lỗi runtime từ Passport Strategy
       if (err) {
         console.error('[JWT.AUTH.GUARD] Error during authentication:', err);
         throw err;
       }
 
-      if (info) {
-        const message = typeof info === 'string' ? info : info?.message;
-        console.warn('[JWT.AUTH.GUARD] Authentication info:', message);
-        throw new UnauthorizedException(message || 'Unauthorized');
-      }
-
-      // Kiểm tra thực thể user có tồn tại thực sự hay không
+      // 2. Kiểm tra xem Passport có giải mã thành công thực thể user từ Strategy hay không
       if (!user) {
-        console.error('[JWT.AUTH.GUARD] User not found after validation');
-        throw new UnauthorizedException('Unauthorized');
+        const infoMessage = typeof info === 'string' ? info : info?.message;
+        console.warn('[JWT.AUTH.GUARD] Authentication failed:', infoMessage || 'No user payload found');
+        
+        throw new UnauthorizedException(
+          infoMessage && infoMessage.includes('jwt expired') 
+            ? 'Token đã hết hạn, vui lòng refresh token' 
+            : 'Mã xác thực không hợp lệ hoặc đã hết hạn'
+        );
       }
 
-      // Ép kiểu an toàn (Safe casting): Kiểm tra xem đối tượng có id của User hay không
+      // 3. Đăng nhập thành công, ép kiểu ghi log kiểm tra định danh
       const validatedUser = user as User;
       console.log(
         '[JWT.AUTH.GUARD] Authentication successful for user:',
         validatedUser.id,
       );
 
-      // Trả về đúng kiểu Generic TUser mà class cha yêu cầu
       return user as TUser;
     } catch (error) {
       console.error('[JWT.AUTH.GUARD] Exception in handleRequest:', error);

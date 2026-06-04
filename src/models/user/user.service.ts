@@ -1,13 +1,14 @@
 import {
-  Injectable,
   BadRequestException,
-  UnauthorizedException,
+  Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
-
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+
+import { ConfigService } from '@nestjs/config';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { RegisterUserDto } from './dto/register-user.dto';
@@ -22,7 +23,6 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 
 import { OtpService } from './services/otp.service';
 import { JwtTokenService } from './services/jwt-token.service';
-
 import { Role } from '../role/entities/role.entity';
 
 @Injectable()
@@ -30,12 +30,35 @@ export class UserService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    private otpService: OtpService,
-    private jwtTokenService: JwtTokenService,
+    private readonly otpService: OtpService,
+    private readonly jwtTokenService: JwtTokenService,
 
     @InjectRepository(Role)
     private readonly roleRepository: Repository<Role>,
+    private readonly configService: ConfigService,
   ) {}
+
+  /**
+   * Helper function: Clone object và sinh ra Full URL cho Avatar (Tránh lỗi nhân đôi Domain)
+   */
+  private formatUserAvatarUrl(user: User): User {
+    if (!user) return user;
+    
+    // Tạo bản sao shallow copy để tránh chỉnh sửa trực tiếp trên reference gốc của TypeORM
+    const userClone = { ...user } as User;
+
+    if (userClone.avatar) {
+      const baseUrl = this.configService.get<string>('URL_BASE_BE') || 'http://localhost:3000';
+      const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+      
+      // Nếu ảnh đã có dạng http:// hoặc https:// thì bỏ qua không nối nữa
+      if (!userClone.avatar.startsWith('http://') && !userClone.avatar.startsWith('https://')) {
+        const cleanAvatar = userClone.avatar.startsWith('/') ? userClone.avatar : `/${userClone.avatar}`;
+        userClone.avatar = `${cleanBaseUrl}${cleanAvatar}`;
+      }
+    }
+    return userClone;
+  }
 
   /**
    * Bước 1: Đăng ký người dùng - lưu tạm thời, gửi OTP
@@ -64,7 +87,6 @@ export class UserService {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Đã đồng bộ chữ async ở OtpService nên gọi await chuẩn cấu trúc bất đồng bộ
     await this.otpService.savePendingUser(
       email,
       fullName,
@@ -91,7 +113,6 @@ export class UserService {
       throw new BadRequestException('OTP không hợp lệ hoặc đã hết hạn');
     }
 
-    // Tìm role 'CUSTOMER' từ bảng roles theo cột role_name
     const customerRole = await this.roleRepository.findOne({
       where: { name: 'CUSTOMER', status: 'ACTIVE' },
     });
@@ -108,9 +129,10 @@ export class UserService {
     const savedUser = await this.userRepository.save(newUser);
     this.otpService.removePendingUser(email);
 
-    // Loại bỏ password trước khi trả về
+    const formattedUser = this.formatUserAvatarUrl(savedUser);
+
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password: _, ...userWithoutPassword } = savedUser;
+    const { password: _, ...userWithoutPassword } = formattedUser;
 
     return {
       message: 'Xác thực OTP thành công. Tài khoản đã được kích hoạt!',
@@ -132,7 +154,6 @@ export class UserService {
 
       console.log('[LOGIN] Starting login process:', { email });
 
-      // Lấy user kèm theo relations để xử lý thông tin phản hồi công khai
       const user = await this.userRepository.findOne({
         where: { email },
         relations: ['roles', 'vipLevel'],
@@ -143,28 +164,14 @@ export class UserService {
         throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
       }
 
-      console.log('[LOGIN] User found:', {
-        userId: user.id,
-        email: user.email,
-      });
-
       if (user.status !== 'ACTIVE') {
-        console.warn('[LOGIN] Account not active:', {
-          userId: user.id,
-          status: user.status,
-        });
         throw new UnauthorizedException('Tài khoản của bạn không hoạt động');
       }
 
       const isPasswordValid = await bcrypt.compare(password, user.password);
       if (!isPasswordValid) {
-        console.warn('[LOGIN] Password mismatch:', { email });
         throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
       }
-
-      console.log('[LOGIN] Password verified, generating tokens:', {
-        userId: user.id,
-      });
 
       const accessToken = this.jwtTokenService.generateAccessToken(
         user.id,
@@ -172,14 +179,8 @@ export class UserService {
       );
 
       const refreshToken = this.jwtTokenService.generateRefreshToken();
-
-      console.log('[LOGIN] Tokens generated:', {
-        accessTokenLength: accessToken.length,
-        refreshTokenLength: refreshToken.length,
-      });
-
-      // Lưu Refresh Token vào User entity với thời hạn 24 giờ
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 giờ
+      
       await this.userRepository.update(
         { id: user.id },
         {
@@ -188,37 +189,31 @@ export class UserService {
         },
       );
 
-      console.log('[LOGIN] Refresh token saved to DB:', {
-        userId: user.id,
-        expiresAt,
-      });
-
-      // Lấy roles sử dụng query builder để chỉ lấy roles hợp lệ (có name không null)
       const userWithRoles = await this.userRepository
         .createQueryBuilder('user')
         .leftJoinAndSelect('user.roles', 'role', 'role.name IS NOT NULL')
         .where('user.id = :userId', { userId: user.id })
         .getOne();
 
+      // Định dạng URL ảnh một cách an toàn thông qua bản sao Clone
+      const formattedUser = this.formatUserAvatarUrl(user);
+
       const userResponse: Omit<User, 'password'> = {
-        id: user.id,
-        vipLevelId: user.vipLevelId,
-        fullName: user.fullName,
-        email: user.email,
-        phone: user.phone,
-        avatar: user.avatar,
-        status: user.status,
-        totalSpending: user.totalSpending,
-        vipUpdatedAt: user.vipUpdatedAt,
-        createdAt: user.createdAt,
+        id: formattedUser.id,
+        vipLevelId: formattedUser.vipLevelId,
+        fullName: formattedUser.fullName,
+        email: formattedUser.email,
+        phone: formattedUser.phone,
+        avatar: formattedUser.avatar,
+        status: formattedUser.status,
+        totalSpending: formattedUser.totalSpending,
+        vipUpdatedAt: formattedUser.vipUpdatedAt,
+        createdAt: formattedUser.createdAt,
         roles: userWithRoles?.roles || [],
-        vipLevel: user.vipLevel,
+        vipLevel: formattedUser.vipLevel,
         refreshToken: undefined,
         refreshTokenExpiresAt: undefined,
       };
-
-      console.log('[LOGIN] Login successful for user:', user.id);
-
       return {
         message: 'Đăng nhập thành công',
         user: userResponse,
@@ -226,16 +221,13 @@ export class UserService {
         refreshToken,
       };
     } catch (error) {
-      console.error('[LOGIN] Error during login:', {
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      });
+      console.error('[LOGIN] Error during login:', error);
       throw error;
     }
   }
 
   /**
-   * Bước 4: Refresh Token - Nhận diện Opaque Token 64 ký tự trực tiếp dưới DB
+   * Bước 4: Refresh Token
    */
   async refreshToken(
     refreshTokenDto: RefreshTokenDto,
@@ -243,20 +235,11 @@ export class UserService {
     try {
       const { refreshToken } = refreshTokenDto;
 
-      console.log('[REFRESH_TOKEN] Starting token refresh:', {
-        tokenLength: refreshToken.length,
-      });
-
-      const isFormatValid =
-        this.jwtTokenService.verifyRefreshToken(refreshToken);
-
+      const isFormatValid = this.jwtTokenService.verifyRefreshToken(refreshToken);
       if (!isFormatValid) {
-        console.warn('[REFRESH_TOKEN] Token format format validation failed');
         throw new UnauthorizedException('Refresh token không đúng định dạng');
       }
 
-      // Tìm kiếm trực tiếp tài khoản sở hữu chuỗi token này trong Database
-      // Sử dụng select cụ thể để lấy lên trường refresh_token do entity đã cấu hình ẩn mặt định
       const user = await this.userRepository.findOne({
         where: { refreshToken },
         select: [
@@ -268,24 +251,11 @@ export class UserService {
         ],
       });
 
-      console.log('[REFRESH_TOKEN] User lookup result:', {
-        found: !!user,
-        userId: user?.id,
-        status: user?.status,
-      });
-
       if (!user || user.status !== 'ACTIVE') {
-        throw new UnauthorizedException(
-          'Tài khoản không tồn tại hoặc không hoạt động',
-        );
+        throw new UnauthorizedException('Tài khoản không tồn tại hoặc không hoạt động');
       }
 
-      // Kiểm tra token đã hết hạn lưu trong bản ghi hay chưa
-      if (
-        !user.refreshTokenExpiresAt ||
-        new Date() > user.refreshTokenExpiresAt
-      ) {
-        console.warn('[REFRESH_TOKEN] Token has expired');
+      if (!user.refreshTokenExpiresAt || new Date() > user.refreshTokenExpiresAt) {
         throw new UnauthorizedException('Refresh token đã hết hạn');
       }
 
@@ -295,9 +265,8 @@ export class UserService {
       );
 
       const newRefreshToken = this.jwtTokenService.generateRefreshToken();
+      const newExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-      // Lưu token mới vào DB (Xoay vòng token liên tục bảo mật)
-      const newExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // Gia hạn thêm 24 giờ
       await this.userRepository.update(
         { id: user.id },
         {
@@ -306,25 +275,18 @@ export class UserService {
         },
       );
 
-      console.log(
-        '[REFRESH_TOKEN] Token refresh successful for user:',
-        user.id,
-      );
-
       return {
         accessToken: newAccessToken,
         refreshToken: newRefreshToken,
       };
     } catch (error) {
-      console.error('[REFRESH_TOKEN] Error during token refresh:', {
-        error: error instanceof Error ? error.message : String(error),
-      });
+      console.error('[REFRESH_TOKEN] Error during token refresh:', error);
       throw error;
     }
   }
 
   /**
-   * Bước 5: Logout - hủy Refresh Token
+   * Bước 5: Logout
    */
   async logoutUser(
     logoutDto: LogoutDto,
@@ -333,23 +295,15 @@ export class UserService {
     try {
       const { refreshToken } = logoutDto;
 
-      console.log('[LOGOUT] Starting logout process:', {
-        userId,
-        refreshTokenProvided: !!refreshToken,
-      });
-
       if (!refreshToken) {
         throw new BadRequestException('Refresh token không được để trống');
       }
 
-      const isFormatValid =
-        this.jwtTokenService.verifyRefreshToken(refreshToken);
-
+      const isFormatValid = this.jwtTokenService.verifyRefreshToken(refreshToken);
       if (!isFormatValid) {
         throw new UnauthorizedException('Refresh token không hợp lệ');
       }
 
-      // Lấy thông tin user hiện tại từ Database để đối chiếu chuỗi token
       const user = await this.userRepository.findOne({
         where: { id: userId },
         select: ['id', 'refreshToken'],
@@ -360,10 +314,7 @@ export class UserService {
       }
 
       if (user.refreshToken !== refreshToken) {
-        console.warn('[LOGOUT] Token mismatch in DB');
-        throw new UnauthorizedException(
-          'Refresh token không khớp với token trong hệ thống',
-        );
+        throw new UnauthorizedException('Refresh token không khớp với hệ thống');
       }
 
       await this.userRepository.update(
@@ -374,24 +325,15 @@ export class UserService {
         },
       );
 
-      console.log('[LOGOUT] Logout successful for user:', userId);
-
-      return {
-        message: 'Đăng xuất thành công',
-      };
+      return { message: 'Đăng xuất thành công' };
     } catch (error) {
-      console.error('[LOGOUT] Error during logout:', {
-        error: error instanceof Error ? error.message : String(error),
-        userId,
-      });
+      console.error('[LOGOUT] Error during logout:', error);
       throw error;
     }
   }
 
-  // ========== LUỒNG RESET PASSWORD ==========
-
   /**
-   * Bước 1: Yêu cầu reset password - gửi OTP đến email
+   * Yêu cầu reset password
    */
   async requestPasswordReset(
     requestResetDto: RequestPasswordResetDto,
@@ -400,12 +342,9 @@ export class UserService {
 
     const user = await this.userRepository.findOne({ where: { email } });
     if (!user) {
-      throw new NotFoundException(
-        'Email này không tồn tại trong hệ thống. Vui lòng kiểm tra lại.',
-      );
+      throw new NotFoundException('Email này không tồn tại trong hệ thống.');
     }
 
-    // Đã đồng bộ chữ async ở OtpService nên gọi await chuẩn cấu trúc bất đồng bộ
     await this.otpService.savePasswordResetOtp(email);
 
     return {
@@ -415,7 +354,7 @@ export class UserService {
   }
 
   /**
-   * Bước 2: Reset password - xác thực OTP và cập nhật mật khẩu mới
+   * Reset password thành công
    */
   async resetPassword(
     resetPasswordDto: ResetPasswordDto,
@@ -443,27 +382,27 @@ export class UserService {
 
     this.otpService.removePasswordResetOtp(email);
 
-    return {
-      message:
-        'Reset password thành công. Vui lòng đăng nhập với mật khẩu mới.',
-    };
+    return { message: 'Reset password thành công. Vui lòng đăng nhập lại.' };
   }
 
-  /**
-   * Các hàm bổ trợ CRUD có sẵn
-   */
+  // ========== CÁC HÀM CRUD & PROFILE ==========
+
   create(createUserDto: CreateUserDto) {
     const newUser = this.userRepository.create(createUserDto);
     return this.userRepository.save(newUser);
   }
 
-  findAll() {
-    return this.userRepository.find({
+  async findAll() {
+    const users = await this.userRepository.find({
       relations: ['roles'],
     });
+    return users.map((user) => this.formatUserAvatarUrl(user));
   }
 
-  async findOne(id: string) {
+  /**
+   * Hàm lấy chi tiết User duy nhất theo UUID
+   */
+  async findOne(id: string): Promise<User> {
     const user = await this.userRepository.findOne({
       where: { id },
       relations: ['roles', 'vipLevel'],
@@ -471,40 +410,15 @@ export class UserService {
     if (!user) {
       throw new NotFoundException(`User with id ${id} not found`);
     }
-    return user;
+    return this.formatUserAvatarUrl(user);
   }
 
-  update(id: string, updateUserDto: UpdateUserDto) {
-    return this.userRepository.update(id, updateUserDto);
+  async update(id: string, updateUserDto: UpdateUserDto) {
+    await this.userRepository.update(id, updateUserDto);
+    return this.findOne(id);
   }
 
-  async addRoleToUser(userId: string, roleId: string): Promise<User> {
-    const user = await this.findOne(userId);
-    const role = await this.roleRepository.findOneBy({
-      id: roleId,
-      status: 'ACTIVE',
-    });
-    if (!role) {
-      throw new NotFoundException(`Active Role with id ${roleId} not found`);
-    }
-
-    const hasRole = user.roles.some((r) => r.id === roleId);
-    if (!hasRole) {
-      user.roles.push(role);
-      await this.userRepository.save(user);
-    }
-    return user;
-  }
-
-  async removeRoleFromUser(userId: string, roleId: string): Promise<User> {
-    const user = await this.findOne(userId);
-
-    user.roles = user.roles.filter((r) => r.id !== roleId);
-    await this.userRepository.save(user);
-    return user;
-  }
-
-  async getProfile(id: string): Promise<Omit<User, 'password' | 'roles'>> {
+  async getProfile(id: string): Promise<Omit<User, 'password'>> {
     const user = await this.findOne(id);
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...result } = user;
@@ -515,16 +429,37 @@ export class UserService {
     id: string,
     updateDto: UpdateUserDto,
   ): Promise<Omit<User, 'password'>> {
-    const user = await this.findOne(id);
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) throw new NotFoundException('User not found');
 
     if (updateDto.fullName) user.fullName = updateDto.fullName;
     if (updateDto.phone) user.phone = updateDto.phone;
     if (updateDto.avatar) user.avatar = updateDto.avatar;
 
     const updatedUser = await this.userRepository.save(user);
+    const formattedUser = this.formatUserAvatarUrl(updatedUser);
+
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password: _, ...result } = updatedUser;
+    const { password: _, ...result } = formattedUser;
     return result;
+  }
+
+  /**
+   * Cập nhật đường dẫn avatar từ Controller xử lý file
+   */
+  async updateAvatar(id: string, avatarPath: string): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id } });
+
+    if (!user) {
+      throw new NotFoundException(`User with id ${id} not found`);
+    }
+
+    if (avatarPath) {
+      user.avatar = avatarPath; 
+      await this.userRepository.save(user);
+    }
+
+    return this.findOne(id);
   }
 
   async changePassword(
@@ -553,10 +488,48 @@ export class UserService {
     return { message: 'Đổi mật khẩu thành công' };
   }
 
+  async addRoleToUser(userId: string, roleId: string): Promise<User> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['roles'],
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    const role = await this.roleRepository.findOneBy({
+      id: roleId,
+      status: 'ACTIVE',
+    });
+    if (!role) {
+      throw new NotFoundException(`Active Role with id ${roleId} not found`);
+    }
+
+    const hasRole = user.roles.some((r) => r.id === roleId);
+    if (!hasRole) {
+      user.roles.push(role);
+      await this.userRepository.save(user);
+    }
+    return this.findOne(userId);
+  }
+
+  async removeRoleFromUser(userId: string, roleId: string): Promise<User> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['roles'],
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    user.roles = user.roles.filter((r) => r.id !== roleId);
+    await this.userRepository.save(user);
+    return this.findOne(userId);
+  }
+
   async softDelete(id: string): Promise<User> {
-    const user = await this.findOne(id);
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) throw new NotFoundException('User not found');
+    
     user.status = user.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
-    return this.userRepository.save(user);
+    await this.userRepository.save(user);
+    return this.findOne(id);
   }
 
   remove(id: string) {
