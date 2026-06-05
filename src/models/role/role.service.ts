@@ -10,7 +10,7 @@ export class RoleService {
   constructor(
     @InjectRepository(Role)
     private readonly roleRepository: Repository<Role>,
-  ) {}
+  ) { }
 
   async create(createRoleDto: CreateRoleDto): Promise<Role> {
     const newRole = this.roleRepository.create(createRoleDto);
@@ -42,5 +42,11 @@ export class RoleService {
     const role = await this.findOne(id);
     role.status = status;
     return await this.roleRepository.save(role);
+  }
+
+  async hardDelete(id: string): Promise<{ message: string }> {
+    const role = await this.findOne(id);
+    await this.roleRepository.delete(id);
+    return { message: `Role with ID ${id} has been permanently deleted.` };
   }
 }
