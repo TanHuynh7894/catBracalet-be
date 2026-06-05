@@ -38,12 +38,11 @@ export class CreateUserDto {
   phone?: string;
 
   @ApiProperty({
-    example: 'https://example.com/avatar.jpg',
-    description: 'Profile picture URL',
+    type: 'string',
+    format: 'binary',
+    description: 'Tệp ảnh đại diện của người dùng (png, jpg, jpeg)',
     required: false,
   })
   @IsOptional()
-  @IsString({ message: 'Avatar URL phải là chuỗi ký tự' })
-  @IsUrl({}, { message: 'Avatar phải là URL hợp lệ' })
-  avatar?: string;
+  avatar?: any;
 }
