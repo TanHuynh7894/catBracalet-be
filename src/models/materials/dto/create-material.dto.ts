@@ -22,7 +22,7 @@ export class CreateMaterialDto {
   })
   @IsOptional()
   @IsString()
-  @MaxLength(100)
+  @MaxLength(50) // Cập nhật lại thành 50 cho khớp với database
   materialType?: string;
 
   @ApiPropertyOptional({
