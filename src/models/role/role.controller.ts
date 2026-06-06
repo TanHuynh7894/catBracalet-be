@@ -14,6 +14,7 @@ import { RoleService } from './role.service';
 import { CreateRoleDto } from './dto/create-role.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { RemoveRoleDto } from './dto/remove-role.dto';
+import { HardDeleteRoleDto } from './dto/hard-delete-role.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -54,11 +55,20 @@ export class RoleController {
   }
 
   @Delete(':roleId')
-  @ApiOperation({ summary: 'Xóa hoặc cập nhật trạng thái Role (Admin)' })
+  @ApiOperation({ summary: 'Xóa mềm hoặc cập nhật trạng thái Role (Admin)' })
   remove(
     @Param('roleId') roleId: string,
     @Query() removeRoleDto: RemoveRoleDto,
   ) {
     return this.roleService.remove(roleId, removeRoleDto.status);
+  }
+
+  @Delete(':roleId/hard')
+  @ApiOperation({ summary: 'Xóa cứng Role vĩnh viễn khỏi Database (Admin)' })
+  hardRemove(
+    @Param('roleId') roleId: string,
+    @Body() hardDeleteRoleDto: HardDeleteRoleDto,
+  ) {
+    return this.roleService.hardDelete(roleId);
   }
 }
