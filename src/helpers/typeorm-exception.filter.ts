@@ -1,4 +1,9 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpStatus } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpStatus,
+} from '@nestjs/common';
 import { Response } from 'express';
 import { QueryFailedError } from 'typeorm';
 
@@ -9,7 +14,7 @@ export class TypeOrmExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
 
     // Mặc định nếu không phân loại được thì trả về 400 hoặc 500
-    let status = HttpStatus.BAD_REQUEST; 
+    let status = HttpStatus.BAD_REQUEST;
     let message = exception.message;
 
     // Bắt các mã lỗi đặc trưng của PostgreSQL

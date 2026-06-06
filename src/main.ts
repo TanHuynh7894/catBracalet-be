@@ -20,7 +20,7 @@ async function bootstrap() {
   );
 
   app.useGlobalFilters(new TypeOrmExceptionFilter());
-  
+
   app.useStaticAssets(join(process.cwd(), 'images'), {
     prefix: '/images',
   });

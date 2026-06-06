@@ -19,7 +19,7 @@ import { VipModule } from './models/VIP/vip.module';
 import { AuthModule } from './auth/auth.module';
 import { CartModule } from './models/carts/cart.module';
 import { OrdersModule } from './models/orders/orders.module';
-import { ProductMaterialsModule } from './models/product-materials/product-materials.module';
+import { ShipmentModule } from './models/shipment/shipment.module';
 
 @Module({
   imports: [
@@ -75,7 +75,7 @@ import { ProductMaterialsModule } from './models/product-materials/product-mater
     VipModule,
     CartModule,
     OrdersModule,
-    ProductMaterialsModule,
+    ShipmentModule,
   ],
   controllers: [AppController],
   providers: [AppService],

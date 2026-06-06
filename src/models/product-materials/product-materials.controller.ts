@@ -4,7 +4,9 @@ import { CreateProductMaterialDto } from './dto/create-product-material.dto';
 
 @Controller('product-materials')
 export class ProductMaterialsController {
-  constructor(private readonly productMaterialsService: ProductMaterialsService) {}
+  constructor(
+    private readonly productMaterialsService: ProductMaterialsService,
+  ) {}
 
   // 1. API Gán vật liệu cho sản phẩm (POST: /product-materials)
   @Post()

@@ -1,4 +1,10 @@
-import { Check, Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Check,
+  Column,
+  Entity,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { ProductMaterial } from '../../product-materials/entities/product-material.entity';
 
 @Entity('materials')
@@ -7,7 +13,10 @@ export class Material {
   @PrimaryGeneratedColumn('uuid', { name: 'material_id' })
   id: string;
 
-  @OneToMany(() => ProductMaterial, (productMaterial) => productMaterial.material)
+  @OneToMany(
+    () => ProductMaterial,
+    (productMaterial) => productMaterial.material,
+  )
   product_materials: ProductMaterial[];
 
   @Column({ length: 255, name: 'material_name' })
