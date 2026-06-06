@@ -1,3 +1,4 @@
+// src/models/product-variants/product-variants.service.ts
 import {
   BadRequestException,
   Injectable,
@@ -5,7 +6,9 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
+import { ProductVariantMapping } from '../product-variant-mappings/entities/product-variant-mapping.entity';
+import { Product } from '../products/entities/product.entity';
 
 import {
   CreateProductVariantDto,
@@ -22,26 +25,77 @@ import { ProductVariant } from './entities/product-variant.entity';
 export class ProductVariantsService {
   constructor(
     private readonly configService: ConfigService,
+    private readonly dataSource: DataSource,
     @InjectRepository(ProductVariant)
     private readonly productVariantRepository: Repository<ProductVariant>,
+    @InjectRepository(Product)
+    private readonly productRepository: Repository<Product>,
   ) {}
 
   async create(
     createProductVariantDto: CreateProductVariantDto,
   ): Promise<ProductVariant> {
+    const { productId, ...variantInput } = createProductVariantDto;
     const stockQuantity = createProductVariantDto.stockQuantity ?? 0;
     const extraPrice = createProductVariantDto.extraPrice ?? 0;
 
     this.validateVariantBusinessRules(stockQuantity, extraPrice);
 
-    const newProductVariant = this.productVariantRepository.create({
-      ...createProductVariantDto,
-      stockQuantity,
-      extraPrice,
-      status: ProductVariantStatus.ACTIVE,
-    });
+    const product = await this.productRepository.findOneBy({ id: productId });
+    if (!product) {
+      throw new NotFoundException(`Product with id ${productId} not found`);
+    }
 
-    return await this.productVariantRepository.save(newProductVariant);
+    // Chạy Transaction bảo đảm an toàn dữ liệu cho cả 2 bảng
+    const fullCreatedVariant = await this.dataSource.transaction(
+      async (manager) => {
+        const variantRepository = manager.getRepository(ProductVariant);
+        const mappingRepository = manager.getRepository(ProductVariantMapping);
+
+        const newProductVariant = variantRepository.create({
+          ...variantInput,
+          stockQuantity,
+          extraPrice,
+          status: ProductVariantStatus.ACTIVE,
+        });
+
+        const savedVariant = await variantRepository.save(newProductVariant);
+
+        // 🟢 ĐÃ FIX CHUẨN: Sử dụng variantId tương thích chính xác với Entity ProductVariantMapping của ông
+        const newMapping = mappingRepository.create({
+          productId,
+          variantId: savedVariant.id,
+          status: 'ACTIVE',
+        });
+
+        await mappingRepository.save(newMapping);
+
+        // Truy vấn nạp đầy đủ cấu trúc quan hệ dữ liệu ngay trong transaction
+        return await variantRepository.findOne({
+          where: { id: savedVariant.id },
+          relations: {
+            productVariantMappings: {
+              product: {
+                category: true,
+                productImages: true,
+                product_materials: {
+                  material: true,
+                },
+              },
+            },
+          },
+        });
+      },
+    );
+
+    if (!fullCreatedVariant) {
+      throw new NotFoundException(
+        `Lỗi hệ thống: Không thể tìm thấy dữ liệu Variant vừa tạo`,
+      );
+    }
+
+    // Đổ baseUrl vào đường dẫn ảnh tương đối và trả về cho Client
+    return this.mapVariantImageUrls(fullCreatedVariant);
   }
 
   async findAll(): Promise<ProductVariant[]> {
@@ -240,6 +294,10 @@ export class ProductVariantsService {
 
     if ('status' in updateProductVariantDto) {
       throw new BadRequestException('Status cannot be updated in this API');
+    }
+
+    if ('productId' in updateProductVariantDto) {
+      throw new BadRequestException('productId cannot be updated in this API');
     }
 
     const stockQuantity =

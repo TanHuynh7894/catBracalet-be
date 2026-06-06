@@ -44,12 +44,18 @@ export function buildImagePublicUrl(absoluteFilePath: string): string {
   return `/${relativePath}`;
 }
 
-export function getImageUploadOptions(): MulterOptions {
+export function getImageUploadOptions(
+  defaultType?: UploadImageType,
+): MulterOptions {
   return {
     storage: diskStorage({
       destination: (req, _file, cb) => {
         try {
-          const type = req.body?.type;
+          // Ưu tiên dùng defaultType truyền vào từ Controller.
+          // Nếu không có, mới fallback về req.body hoặc req.query
+          const type =
+            defaultType || req.body?.type || (req.query?.type as string);
+
           const uploadDirectory = resolveUploadDirectory(type);
           ensureDirectory(uploadDirectory);
           cb(null, uploadDirectory);
