@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, EntityManager, In } from 'typeorm';
+import { Repository, DataSource, EntityManager } from 'typeorm';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { CreateOrderItemDto } from './dto/create-order-item.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
@@ -16,6 +16,14 @@ import { ProductVariant } from '../product-variants/entities/product-variant.ent
 import { Vouchers } from '../vouchers/entities/vouchers.entity';
 import { UserAddress } from '../user_address/entities/user_address.entity';
 import { VouchersService } from '../vouchers/vouchers.service';
+import { ShipmentService } from '../shipment/shipment.service';
+
+interface CalculatedOrderItem {
+  variantId: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+}
 
 @Injectable()
 export class OrdersService {
@@ -35,6 +43,7 @@ export class OrdersService {
     @InjectRepository(UserAddress)
     private readonly addressRepository: Repository<UserAddress>,
     private readonly vouchersService: VouchersService,
+    private readonly shipmentService: ShipmentService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -47,60 +56,59 @@ export class OrdersService {
     voucherCode?: string,
   ) {
     return await this.dataSource.transaction(async (manager: EntityManager) => {
-      try {
-        // 1. Validate checkout conditions
-        const { cartItems, voucher, address } = await this.validateCheckout(
+      // 1. Validate checkout conditions
+      const { cartItems, voucher, address } = await this.validateCheckout(
+        manager,
+        userId,
+        addressId,
+        voucherCode,
+      );
+
+      // 2. Calculate order total and prepare item data
+      const { totalAmount, orderItemsData } = await this.calculateOrderTotal(
+        cartItems,
+        address,
+        voucher,
+      );
+
+      // 3. Create Order
+      const order = await this.createOrder(
+        manager,
+        userId,
+        addressId,
+        voucher?.id,
+        totalAmount,
+      );
+
+      // 4. Create Order Items
+      await this.createOrderItems(manager, order.id, orderItemsData);
+
+      // 5. Apply Voucher (Reduce voucher quantity) - Gọi qua VoucherService
+      if (voucher) {
+        await this.vouchersService.decrementVoucherQuantity(
+          voucher.id,
           manager,
-          userId,
-          addressId,
-          voucherCode,
         );
-
-        // 2. Calculate order total and prepare item data
-        const { totalAmount, subtotal, discountAmount, orderItemsData } =
-          await this.calculateOrderTotal(cartItems, voucher);
-
-        // 3. Create Order
-        const order = await this.createOrder(
-          manager,
-          userId,
-          addressId,
-          voucher?.id,
-          totalAmount,
-        );
-
-        // 4. Create Order Items
-        await this.createOrderItems(manager, order.id, orderItemsData);
-
-        // 5. Apply Voucher (Reduce voucher quantity) - Gọi qua VoucherService
-        if (voucher) {
-          await this.vouchersService.decrementVoucherQuantity(
-            voucher.id,
-            manager,
-          );
-        }
-
-        // 6. Deduct Stock from product variants
-        await this.deductStock(manager, cartItems);
-
-        // 7. Clear Cart Items
-        await this.clearCart(manager, userId);
-
-        return await manager.findOne(Order, {
-          where: { id: order.id },
-          relations: [
-            'user',
-            'address',
-            'voucher',
-            'items',
-            'items.variant',
-            'items.variant.productVariantMappings',
-            'items.variant.productVariantMappings.product',
-          ],
-        });
-      } catch (error) {
-        throw error;
       }
+
+      // 6. Deduct Stock from product variants
+      await this.deductStock(manager, cartItems);
+
+      // 7. Clear Cart Items
+      await this.clearCart(manager, userId);
+
+      return await manager.findOne(Order, {
+        where: { id: order.id },
+        relations: [
+          'user',
+          'address',
+          'voucher',
+          'items',
+          'items.variant',
+          'items.variant.productVariantMappings',
+          'items.variant.productVariantMappings.product',
+        ],
+      });
     });
   }
 
@@ -161,7 +169,7 @@ export class OrdersService {
       const savedOrder = await manager.save(order);
 
       if (newStatus === 'COMPLETED') {
-        await this.triggerVipUpdate(order.userId, manager);
+        this.triggerVipUpdate(order.userId);
       }
 
       return savedOrder;
@@ -189,7 +197,7 @@ export class OrdersService {
     currentStatus: string,
     nextStatus: string,
   ) {
-    const validTransitions = {
+    const validTransitions: Record<string, string[]> = {
       PENDING: ['CONFIRMED', 'CANCELLED'],
       CONFIRMED: ['SHIPPING', 'CANCELLED'],
       SHIPPING: ['COMPLETED'],
@@ -214,7 +222,7 @@ export class OrdersService {
   /**
    * Helper: Trigger cập nhật hạng thành viên VIP (Mở rộng sau)
    */
-  private async triggerVipUpdate(userId: string, manager: EntityManager) {
+  private triggerVipUpdate(userId: string) {
     console.log(`Triggering VIP update logic for user: ${userId}`);
   }
 
@@ -286,8 +294,12 @@ export class OrdersService {
   /**
    * Calculate total amount and prepare order items data
    */
-  private async calculateOrderTotal(cartItems: CartItem[], voucher?: Vouchers) {
-    let subtotal = 0;
+  private async calculateOrderTotal(
+    cartItems: CartItem[],
+    address: UserAddress,
+    voucher?: Vouchers,
+  ) {
+    let productSubtotal = 0;
     const orderItemsData = cartItems.map((item) => {
       const basePrice = Number(
         item.variant.productVariantMappings?.[0]?.product?.basePrice || 0,
@@ -296,7 +308,7 @@ export class OrdersService {
       const unitPrice = basePrice + extraPrice;
       const totalPrice = unitPrice * item.quantity;
 
-      subtotal += totalPrice;
+      productSubtotal += totalPrice;
 
       return {
         variantId: item.variantId,
@@ -306,6 +318,11 @@ export class OrdersService {
       };
     });
 
+    const shippingFee = await this.calculateCustomerShippingFee(
+      address,
+      productSubtotal,
+    );
+    const subtotal = productSubtotal + shippingFee;
     let totalAmount = subtotal;
     let discountAmount = 0;
 
@@ -319,6 +336,20 @@ export class OrdersService {
     }
 
     return { totalAmount, subtotal, discountAmount, orderItemsData };
+  }
+
+  private async calculateCustomerShippingFee(
+    address: UserAddress,
+    productSubtotal: number,
+  ): Promise<number> {
+    const shippingFee = await this.shipmentService.calculateFeeForAddress(
+      address,
+      {
+        amount: productSubtotal,
+      },
+    );
+
+    return Number(shippingFee.total_shipping_fee);
   }
 
   /**
@@ -348,7 +379,7 @@ export class OrdersService {
   private async createOrderItems(
     manager: EntityManager,
     orderId: string,
-    itemsData: any[],
+    itemsData: CalculatedOrderItem[],
   ) {
     const orderItems = itemsData.map((item) =>
       manager.create(OrderItem, {

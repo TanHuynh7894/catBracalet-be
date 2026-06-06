@@ -13,6 +13,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { Order } from '../orders/entities/order.entity';
+import { UserAddress } from '../user_address/entities/user_address.entity';
 import { Shipment } from './entities/shipment.entity';
 import { AdminCreateShipmentDto } from './dto/admin-create-shipment.dto';
 import { CalculateFeeDto } from './dto/calculate-fee.dto';
@@ -240,6 +241,24 @@ export class ShipmentService {
       total_shipping_fee: customerShippingFee,
       total_amount_to_pay: customerShippingFee,
     };
+  }
+
+  async calculateFeeForAddress(
+    address: Pick<UserAddress, 'province' | 'district' | 'ward'>,
+    parcel: Omit<CalculateFeeDto, 'city' | 'district' | 'ward'> = {},
+  ) {
+    const destinationAddress = await this.resolveAddressCodes(
+      address.province,
+      address.district,
+      address.ward,
+    );
+
+    return this.calculateFeeForClient({
+      ...parcel,
+      city: destinationAddress.city,
+      district: destinationAddress.district,
+      ward: destinationAddress.ward,
+    });
   }
 
   async calculateFeeForAdmin(dto: CalculateFeeDto) {

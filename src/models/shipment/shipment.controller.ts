@@ -96,6 +96,8 @@ export class ShipmentController {
     @Headers('x-goship-hmac-sha256') hmacHeader: string,
     @Req() req: Request & { rawBody?: Buffer },
   ) {
+    this.logWebhookDebug(req, webhookDto, hmacHeader);
+
     const clientSecret = process.env.GOSHIP_CLIENT_SECRET;
 
     if (!req.rawBody || !hmacHeader || !clientSecret) {
@@ -159,6 +161,31 @@ export class ShipmentController {
 
   private normalizeHmacHeader(value: string): string {
     return value.trim().replace(/^sha256=/i, '');
+  }
+
+  private logWebhookDebug(
+    req: Request & { rawBody?: Buffer },
+    webhookDto: GoshipWebhookDto,
+    hmacHeader?: string,
+  ): void {
+    if (process.env.GOSHIP_WEBHOOK_DEBUG !== 'true') return;
+
+    const rawBody = req.rawBody?.toString('utf8') ?? '';
+    const signaturePreview = hmacHeader
+      ? `${hmacHeader.slice(0, 12)}...${hmacHeader.slice(-8)}`
+      : null;
+
+    console.log('[GOSHIP_WEBHOOK_DEBUG] Headers:', {
+      names: Object.keys(req.headers),
+      signatureHeader: signaturePreview,
+      contentType: req.headers['content-type'],
+      userAgent: req.headers['user-agent'],
+    });
+    console.log('[GOSHIP_WEBHOOK_DEBUG] Raw body:', {
+      length: rawBody.length,
+      preview: rawBody.slice(0, 1000),
+    });
+    console.log('[GOSHIP_WEBHOOK_DEBUG] Parsed body:', webhookDto);
   }
 
   private timingSafeStringEqual(left: string, right: string): boolean {
