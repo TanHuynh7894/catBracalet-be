@@ -20,6 +20,7 @@ import { AuthModule } from './auth/auth.module';
 import { CartModule } from './models/carts/cart.module';
 import { OrdersModule } from './models/orders/orders.module';
 import { ProductMaterialsModule } from './models/product-materials/product-materials.module';
+import { ConsultationRegistrationsModule } from './models/consultation-registrations/consultation-registrations.module';
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import { ProductMaterialsModule } from './models/product-materials/product-mater
     CartModule,
     OrdersModule,
     ProductMaterialsModule,
+    ConsultationRegistrationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
