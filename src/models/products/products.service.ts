@@ -12,6 +12,8 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { Product } from './entities/product.entity';
 import { ProductMaterial } from '../product-materials/entities/product-material.entity';
 
+import { FilterProductDto } from './dto/FilterProduct.dto';
+
 @Injectable()
 export class ProductsService {
   constructor(
@@ -23,7 +25,7 @@ export class ProductsService {
 
     // Inject ConfigService để lấy giá trị biến môi trường (.env)
     private readonly configService: ConfigService,
-  ) {}
+  ) { }
 
   /**
    * Helper function xuất ra: URL_BASE_BE + THUMBNAIL GỐC
@@ -32,7 +34,7 @@ export class ProductsService {
     if (product && product.thumbnail) {
       // Đọc trực tiếp từ configService mỗi khi hàm chạy để đảm bảo không bị cache chuỗi rỗng
       const baseUrl = this.configService.get<string>('URL_BASE_BE') || 'http://localhost:3000';
-      
+
       console.log('--- LOG DEBUG ---');
       console.log('KEY URL_BASE_BE ĐỌC ĐƯỢC:', baseUrl);
       console.log('THUMBNAIL GỐC TRONG DB:', product.thumbnail);
@@ -43,7 +45,7 @@ export class ProductsService {
 
       // Gán đè kết quả nối chuỗi trực tiếp
       product.thumbnail = `${cleanBaseUrl}${cleanThumbnail}`;
-      
+
       console.log('KẾT QUẢ SAU KHI NỐI URL:', product.thumbnail);
       console.log('-----------------');
     }
@@ -152,14 +154,14 @@ export class ProductsService {
 
   async softDelete(id: string): Promise<Product> {
     const product = await this.productRepository.findOne({ where: { id } });
-    
+
     if (!product) {
       throw new NotFoundException(`Product with id ${id} not found`);
     }
 
     product.status = ProductStatus.INACTIVE;
     const savedProduct = await this.productRepository.save(product);
-    
+
     return this.findOne(savedProduct.id);
   }
 
@@ -171,5 +173,49 @@ export class ProductsService {
     }
 
     await this.productRepository.remove(product);
+  }
+
+  async filterProducts(filterDto: FilterProductDto): Promise<Product[]> {
+    // Thêm stoneColor vào lúc destructuring
+    const { color, stoneColor, stoneType, size, minPrice, maxPrice } = filterDto;
+
+    const query = this.productRepository.createQueryBuilder('product')
+      .leftJoinAndSelect('product.product_materials', 'product_materials')
+      .leftJoinAndSelect('product_materials.material', 'material')
+      .where('product.status = :status', { status: ProductStatus.ACTIVE });
+
+    // 1. Lọc Màu sắc và Màu đá (Gom chung lại dùng IN để tránh xung đột AND)
+    const searchColors = [];
+    if (color) searchColors.push(color);
+    if (stoneColor) searchColors.push(stoneColor);
+
+    if (searchColors.length > 0) {
+      query.andWhere('material.color IN (:...searchColors)', { searchColors });
+    }
+
+    // 2. Lọc Loại đá (Nằm trong bảng material luôn)
+    if (stoneType) {
+      query.andWhere('material.materialType = :stoneType', { stoneType });
+    }
+
+    // 3. Lọc Kích cỡ (Nằm trong bảng variant)
+    if (size) {
+      query.innerJoin('product_variant_mapping', 'mapping', 'mapping.product_id = product.id')
+           .innerJoin('product_variants', 'variant', 'variant.id = mapping.variant_id')
+           .andWhere('variant.size = :size', { size });
+    }
+
+    // 4. Lọc giá tiền (Nằm ở bảng Product)
+    if (minPrice !== undefined) {
+      query.andWhere('product.basePrice >= :minPrice', { minPrice });
+    }
+
+    if (maxPrice !== undefined) {
+      query.andWhere('product.basePrice <= :maxPrice', { maxPrice });
+    }
+
+    const products = await query.getMany();
+
+    return products.map((product) => this.formatProductImageUrl(product));
   }
 }
