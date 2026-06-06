@@ -11,15 +11,15 @@ export class ProductMaterial {
   material_id: string;
 
   // Mối quan hệ với bảng Products
-  @ManyToOne(() => Product, (product) => product.product_materials, { 
-    onDelete: 'CASCADE' 
+  @ManyToOne(() => Product, (product) => product.product_materials, {
+    onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'product_id' })
   product: Product;
 
   // Mối quan hệ với bảng Materials
-  @ManyToOne(() => Material, (material) => material.product_materials, { 
-    onDelete: 'CASCADE' 
+  @ManyToOne(() => Material, (material) => material.product_materials, {
+    onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'material_id' })
   material: Material;

@@ -509,7 +509,8 @@ export class OrdersService {
   }
 
   async getOrdersByTime(startDate: Date, endDate: Date) {
-    return this.orderRepository.createQueryBuilder('order')
+    return this.orderRepository
+      .createQueryBuilder('order')
       .leftJoinAndSelect('order.user', 'user')
       .leftJoinAndSelect('order.address', 'address')
       .leftJoinAndSelect('order.voucher', 'voucher')

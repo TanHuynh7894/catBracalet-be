@@ -47,47 +47,51 @@ export class ProductVariantsService {
     }
 
     // Chạy Transaction bảo đảm an toàn dữ liệu cho cả 2 bảng
-    const fullCreatedVariant = await this.dataSource.transaction(async (manager) => {
-      const variantRepository = manager.getRepository(ProductVariant);
-      const mappingRepository = manager.getRepository(ProductVariantMapping);
+    const fullCreatedVariant = await this.dataSource.transaction(
+      async (manager) => {
+        const variantRepository = manager.getRepository(ProductVariant);
+        const mappingRepository = manager.getRepository(ProductVariantMapping);
 
-      const newProductVariant = variantRepository.create({
-        ...variantInput,
-        stockQuantity,
-        extraPrice,
-        status: ProductVariantStatus.ACTIVE,
-      });
+        const newProductVariant = variantRepository.create({
+          ...variantInput,
+          stockQuantity,
+          extraPrice,
+          status: ProductVariantStatus.ACTIVE,
+        });
 
-      const savedVariant = await variantRepository.save(newProductVariant);
+        const savedVariant = await variantRepository.save(newProductVariant);
 
-      // 🟢 ĐÃ FIX CHUẨN: Sử dụng variantId tương thích chính xác với Entity ProductVariantMapping của ông
-      const newMapping = mappingRepository.create({
-        productId,
-        variantId: savedVariant.id, 
-        status: 'ACTIVE',
-      });
+        // 🟢 ĐÃ FIX CHUẨN: Sử dụng variantId tương thích chính xác với Entity ProductVariantMapping của ông
+        const newMapping = mappingRepository.create({
+          productId,
+          variantId: savedVariant.id,
+          status: 'ACTIVE',
+        });
 
-      await mappingRepository.save(newMapping);
+        await mappingRepository.save(newMapping);
 
-      // Truy vấn nạp đầy đủ cấu trúc quan hệ dữ liệu ngay trong transaction
-      return await variantRepository.findOne({
-        where: { id: savedVariant.id },
-        relations: {
-          productVariantMappings: {
-            product: {
-              category: true,
-              productImages: true,
-              product_materials: {
-                material: true,
+        // Truy vấn nạp đầy đủ cấu trúc quan hệ dữ liệu ngay trong transaction
+        return await variantRepository.findOne({
+          where: { id: savedVariant.id },
+          relations: {
+            productVariantMappings: {
+              product: {
+                category: true,
+                productImages: true,
+                product_materials: {
+                  material: true,
+                },
               },
             },
           },
-        },
-      });
-    });
+        });
+      },
+    );
 
     if (!fullCreatedVariant) {
-      throw new NotFoundException(`Lỗi hệ thống: Không thể tìm thấy dữ liệu Variant vừa tạo`);
+      throw new NotFoundException(
+        `Lỗi hệ thống: Không thể tìm thấy dữ liệu Variant vừa tạo`,
+      );
     }
 
     // Đổ baseUrl vào đường dẫn ảnh tương đối và trả về cho Client

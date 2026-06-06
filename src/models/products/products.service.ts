@@ -31,19 +31,25 @@ export class ProductsService {
   private formatProductImageUrl(product: Product): Product {
     if (product && product.thumbnail) {
       // Đọc trực tiếp từ configService mỗi khi hàm chạy để đảm bảo không bị cache chuỗi rỗng
-      const baseUrl = this.configService.get<string>('URL_BASE_BE') || 'http://localhost:3000';
-      
+      const baseUrl =
+        this.configService.get<string>('URL_BASE_BE') ||
+        'http://localhost:3000';
+
       console.log('--- LOG DEBUG ---');
       console.log('KEY URL_BASE_BE ĐỌC ĐƯỢC:', baseUrl);
       console.log('THUMBNAIL GỐC TRONG DB:', product.thumbnail);
 
       // Làm sạch các dấu gạch chéo dư thừa trước khi nối chuỗi
-      const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-      const cleanThumbnail = product.thumbnail.startsWith('/') ? product.thumbnail : `/${product.thumbnail}`;
+      const cleanBaseUrl = baseUrl.endsWith('/')
+        ? baseUrl.slice(0, -1)
+        : baseUrl;
+      const cleanThumbnail = product.thumbnail.startsWith('/')
+        ? product.thumbnail
+        : `/${product.thumbnail}`;
 
       // Gán đè kết quả nối chuỗi trực tiếp
       product.thumbnail = `${cleanBaseUrl}${cleanThumbnail}`;
-      
+
       console.log('KẾT QUẢ SAU KHI NỐI URL:', product.thumbnail);
       console.log('-----------------');
     }
@@ -152,14 +158,14 @@ export class ProductsService {
 
   async softDelete(id: string): Promise<Product> {
     const product = await this.productRepository.findOne({ where: { id } });
-    
+
     if (!product) {
       throw new NotFoundException(`Product with id ${id} not found`);
     }
 
     product.status = ProductStatus.INACTIVE;
     const savedProduct = await this.productRepository.save(product);
-    
+
     return this.findOne(savedProduct.id);
   }
 

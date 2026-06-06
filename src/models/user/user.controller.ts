@@ -48,13 +48,13 @@ import { UploadAvatarDto } from './dto/upload-avatar.dto';
 import {
   getImageUploadOptions,
   buildImagePublicUrl,
-  UploadImageType
+  UploadImageType,
 } from '../../helpers/upload-image.helper';
 
 @ApiTags('User')
 @Controller('user')
 export class UserController {
-  constructor(private readonly userService: UserService) { }
+  constructor(private readonly userService: UserService) {}
 
   @Post('register')
   @ApiOperation({
@@ -141,13 +141,20 @@ export class UserController {
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Upload or update avatar for user',
-    description: 'Nhận tệp ảnh nhị phân và tự động lưu vào thư mục images/avatar',
+    description:
+      'Nhận tệp ảnh nhị phân và tự động lưu vào thư mục images/avatar',
   })
   @ApiParam({ name: 'id', description: 'User UUID' })
   @ApiBody({ type: UploadAvatarDto })
-  @ApiResponse({ status: 200, description: 'Avatar updated successfully', type: User })
+  @ApiResponse({
+    status: 200,
+    description: 'Avatar updated successfully',
+    type: User,
+  })
   // 💡 Gắn cứng UploadImageType.AVATAR vào ngay đây
-  @UseInterceptors(FileInterceptor('avatar', getImageUploadOptions(UploadImageType.AVATAR)))
+  @UseInterceptors(
+    FileInterceptor('avatar', getImageUploadOptions(UploadImageType.AVATAR)),
+  )
   async uploadAvatar(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @UploadedFile() file: Express.Multer.File,
@@ -169,7 +176,9 @@ export class UserController {
     summary: 'Create a new user (Admin)',
     description: 'Directly create a user in the database',
   })
-  @UseInterceptors(FileInterceptor('avatar', getImageUploadOptions(UploadImageType.AVATAR)))
+  @UseInterceptors(
+    FileInterceptor('avatar', getImageUploadOptions(UploadImageType.AVATAR)),
+  )
   async create(
     @Body() createUserDto: CreateUserDto,
     @UploadedFile() file: Express.Multer.File,
@@ -208,7 +217,9 @@ export class UserController {
     summary: 'Update user profile',
     description: 'Update basic profile information for a user',
   })
-  @UseInterceptors(FileInterceptor('avatar', getImageUploadOptions(UploadImageType.AVATAR)))
+  @UseInterceptors(
+    FileInterceptor('avatar', getImageUploadOptions(UploadImageType.AVATAR)),
+  )
   updateProfile(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() updateDto: UpdateUserDto,
@@ -249,7 +260,9 @@ export class UserController {
     summary: 'Update user (Admin)',
     description: 'Update any user field by ID',
   })
-  @UseInterceptors(FileInterceptor('avatar', getImageUploadOptions(UploadImageType.AVATAR)))
+  @UseInterceptors(
+    FileInterceptor('avatar', getImageUploadOptions(UploadImageType.AVATAR)),
+  )
   update(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() updateUserDto: UpdateUserDto,
@@ -268,7 +281,7 @@ export class UserController {
   })
   addRole(
     @Param('id', new ParseUUIDPipe({ version: '4' })) userId: string,
-    @Body() addUserRoleDto: AddUserRoleDto
+    @Body() addUserRoleDto: AddUserRoleDto,
   ) {
     return this.userService.addRoleToUser(userId, addUserRoleDto.roleId);
   }

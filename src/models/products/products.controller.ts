@@ -26,7 +26,10 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Product } from './entities/product.entity';
 import { ProductsService } from './products.service';
-import { getImageUploadOptions, buildImagePublicUrl } from '../../helpers/upload-image.helper';
+import {
+  getImageUploadOptions,
+  buildImagePublicUrl,
+} from '../../helpers/upload-image.helper';
 
 /**
  * Hàm helper dùng để xử lý dữ liệu materialIds truyền lên từ multipart/form-data.
@@ -57,12 +60,26 @@ export class ProductsController {
     schema: {
       type: 'object',
       properties: {
-        type: { type: 'string', example: 'P', description: 'Bắt buộc là P (PRODUCT) để Multer phân loại thư mục' },
+        type: {
+          type: 'string',
+          example: 'P',
+          description: 'Bắt buộc là P (PRODUCT) để Multer phân loại thư mục',
+        },
         productName: { type: 'string', example: 'Cat Bracelet Premium' },
         basePrice: { type: 'number', example: 199000 },
-        categoryId: { type: 'string', example: '6f9c4b1a-b5c2-4d96-9a2f-4b327cf0d917' },
-        description: { type: 'string', example: 'Handmade bracelet for cat lovers' },
-        materialIds: { type: 'array', items: { type: 'string' }, example: ['8fe51f4d-e889-4fda-86ad-d1d3cae6d6a9'] },
+        categoryId: {
+          type: 'string',
+          example: '6f9c4b1a-b5c2-4d96-9a2f-4b327cf0d917',
+        },
+        description: {
+          type: 'string',
+          example: 'Handmade bracelet for cat lovers',
+        },
+        materialIds: {
+          type: 'array',
+          items: { type: 'string' },
+          example: ['8fe51f4d-e889-4fda-86ad-d1d3cae6d6a9'],
+        },
         thumbnail: {
           type: 'string',
           format: 'binary',
@@ -80,14 +97,16 @@ export class ProductsController {
   ) {
     // Ép kiểu dữ liệu đề phòng Form-data gửi materialIds sai cấu trúc mảng
     if (createProductDto.materialIds) {
-      createProductDto.materialIds = parseMultipartArray(createProductDto.materialIds);
+      createProductDto.materialIds = parseMultipartArray(
+        createProductDto.materialIds,
+      );
     }
 
     // Nếu có file upload, biến đổi đường dẫn tuyệt đối thành tương đối để lưu vào DB
     if (file) {
       createProductDto.thumbnail = buildImagePublicUrl(file.path);
     }
-    
+
     return this.productsService.create(createProductDto);
   }
 
@@ -124,11 +143,21 @@ export class ProductsController {
     schema: {
       type: 'object',
       properties: {
-        type: { type: 'string', example: 'P', description: 'Bắt buộc là P (PRODUCT) nếu có cập nhật ảnh' },
+        type: {
+          type: 'string',
+          example: 'P',
+          description: 'Bắt buộc là P (PRODUCT) nếu có cập nhật ảnh',
+        },
         productName: { type: 'string', example: 'Cat Bracelet Premium Super' },
         basePrice: { type: 'number', example: 219000 },
-        categoryId: { type: 'string', example: '6f9c4b1a-b5c2-4d96-9a2f-4b327cf0d917' },
-        description: { type: 'string', example: 'Handmade bracelet for cat lovers - Updated' },
+        categoryId: {
+          type: 'string',
+          example: '6f9c4b1a-b5c2-4d96-9a2f-4b327cf0d917',
+        },
+        description: {
+          type: 'string',
+          example: 'Handmade bracelet for cat lovers - Updated',
+        },
         materialIds: { type: 'array', items: { type: 'string' } },
         thumbnail: {
           type: 'string',
@@ -141,13 +170,15 @@ export class ProductsController {
   @ApiOkResponse({ type: Product })
   @UseInterceptors(FileInterceptor('thumbnail', getImageUploadOptions()))
   update(
-    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, 
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() updateProductDto: UpdateProductDto,
     @UploadedFile() file: Express.Multer.File,
   ) {
     // Ép kiểu dữ liệu đề phòng Form-data gửi materialIds sai cấu trúc mảng khi update
     if (updateProductDto.materialIds) {
-      updateProductDto.materialIds = parseMultipartArray(updateProductDto.materialIds);
+      updateProductDto.materialIds = parseMultipartArray(
+        updateProductDto.materialIds,
+      );
     }
 
     // Nếu người dùng chọn upload file ảnh mới khi cập nhật

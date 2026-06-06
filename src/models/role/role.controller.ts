@@ -25,7 +25,7 @@ import { Roles } from '../../auth/decorators/roles.decorator';
 @Roles('ADMIN') // Chỉ Admin mới được quản lý Role
 @Controller('role')
 export class RoleController {
-  constructor(private readonly roleService: RoleService) { }
+  constructor(private readonly roleService: RoleService) {}
 
   @Post()
   @ApiOperation({ summary: 'Tạo Role mới (Admin)' })
@@ -56,7 +56,10 @@ export class RoleController {
 
   @Delete(':roleId')
   @ApiOperation({ summary: 'Xóa mềm hoặc cập nhật trạng thái Role (Admin)' })
-  remove(@Param('roleId') roleId: string, @Query() removeRoleDto: RemoveRoleDto) {
+  remove(
+    @Param('roleId') roleId: string,
+    @Query() removeRoleDto: RemoveRoleDto,
+  ) {
     return this.roleService.remove(roleId, removeRoleDto.status);
   }
 

@@ -34,7 +34,10 @@ export class Product {
   )
   productVariantMappings?: ProductVariantMapping[];
 
-  @OneToMany(() => ProductMaterial, (productMaterial) => productMaterial.product)
+  @OneToMany(
+    () => ProductMaterial,
+    (productMaterial) => productMaterial.product,
+  )
   product_materials: ProductMaterial[];
 
   @Column({ length: 255, name: 'product_name' })

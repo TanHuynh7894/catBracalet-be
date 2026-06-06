@@ -48,7 +48,7 @@ export class ProductVariantsController {
 
   @Get('filter')
   @ApiOperation({ summary: 'Get filtered product variant list' })
-  @ApiQuery({ type: GetProductListDto }) 
+  @ApiQuery({ type: GetProductListDto })
   @ApiOkResponse({ type: ProductVariant, isArray: true })
   getProductList(@Query() params: GetProductListDto) {
     return this.productVariantsService.getProductList(params);
@@ -75,7 +75,7 @@ export class ProductVariantsController {
     summary: 'Update product variant (status cannot be updated here)',
   })
   @ApiParam({ name: 'id', description: 'Product variant UUID' })
-  @ApiBody({ type: UpdateProductVariantDto }) 
+  @ApiBody({ type: UpdateProductVariantDto })
   @ApiOkResponse({ type: ProductVariant })
   update(
     @Param('id') id: string,

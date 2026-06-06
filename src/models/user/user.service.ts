@@ -43,17 +43,26 @@ export class UserService {
    */
   private formatUserAvatarUrl(user: User): User {
     if (!user) return user;
-    
+
     // Tạo bản sao shallow copy để tránh chỉnh sửa trực tiếp trên reference gốc của TypeORM
     const userClone = { ...user } as User;
 
     if (userClone.avatar) {
-      const baseUrl = this.configService.get<string>('URL_BASE_BE') || 'http://localhost:3000';
-      const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-      
+      const baseUrl =
+        this.configService.get<string>('URL_BASE_BE') ||
+        'http://localhost:3000';
+      const cleanBaseUrl = baseUrl.endsWith('/')
+        ? baseUrl.slice(0, -1)
+        : baseUrl;
+
       // Nếu ảnh đã có dạng http:// hoặc https:// thì bỏ qua không nối nữa
-      if (!userClone.avatar.startsWith('http://') && !userClone.avatar.startsWith('https://')) {
-        const cleanAvatar = userClone.avatar.startsWith('/') ? userClone.avatar : `/${userClone.avatar}`;
+      if (
+        !userClone.avatar.startsWith('http://') &&
+        !userClone.avatar.startsWith('https://')
+      ) {
+        const cleanAvatar = userClone.avatar.startsWith('/')
+          ? userClone.avatar
+          : `/${userClone.avatar}`;
         userClone.avatar = `${cleanBaseUrl}${cleanAvatar}`;
       }
     }
@@ -180,7 +189,7 @@ export class UserService {
 
       const refreshToken = this.jwtTokenService.generateRefreshToken();
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 giờ
-      
+
       await this.userRepository.update(
         { id: user.id },
         {
@@ -235,7 +244,8 @@ export class UserService {
     try {
       const { refreshToken } = refreshTokenDto;
 
-      const isFormatValid = this.jwtTokenService.verifyRefreshToken(refreshToken);
+      const isFormatValid =
+        this.jwtTokenService.verifyRefreshToken(refreshToken);
       if (!isFormatValid) {
         throw new UnauthorizedException('Refresh token không đúng định dạng');
       }
@@ -252,10 +262,15 @@ export class UserService {
       });
 
       if (!user || user.status !== 'ACTIVE') {
-        throw new UnauthorizedException('Tài khoản không tồn tại hoặc không hoạt động');
+        throw new UnauthorizedException(
+          'Tài khoản không tồn tại hoặc không hoạt động',
+        );
       }
 
-      if (!user.refreshTokenExpiresAt || new Date() > user.refreshTokenExpiresAt) {
+      if (
+        !user.refreshTokenExpiresAt ||
+        new Date() > user.refreshTokenExpiresAt
+      ) {
         throw new UnauthorizedException('Refresh token đã hết hạn');
       }
 
@@ -299,7 +314,8 @@ export class UserService {
         throw new BadRequestException('Refresh token không được để trống');
       }
 
-      const isFormatValid = this.jwtTokenService.verifyRefreshToken(refreshToken);
+      const isFormatValid =
+        this.jwtTokenService.verifyRefreshToken(refreshToken);
       if (!isFormatValid) {
         throw new UnauthorizedException('Refresh token không hợp lệ');
       }
@@ -314,7 +330,9 @@ export class UserService {
       }
 
       if (user.refreshToken !== refreshToken) {
-        throw new UnauthorizedException('Refresh token không khớp với hệ thống');
+        throw new UnauthorizedException(
+          'Refresh token không khớp với hệ thống',
+        );
       }
 
       await this.userRepository.update(
@@ -455,7 +473,7 @@ export class UserService {
     }
 
     if (avatarPath) {
-      user.avatar = avatarPath; 
+      user.avatar = avatarPath;
       await this.userRepository.save(user);
     }
 
@@ -526,7 +544,7 @@ export class UserService {
   async softDelete(id: string): Promise<User> {
     const user = await this.userRepository.findOne({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
-    
+
     user.status = user.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
     await this.userRepository.save(user);
     return this.findOne(id);

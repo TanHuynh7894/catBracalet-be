@@ -29,7 +29,7 @@ export class CreateProductDto {
     description: 'The list of material UUIDs associated with the product',
     example: [
       '8fe51f4d-e889-4fda-86ad-d1d3cae6d6a9',
-      'c39b8214-41d3-4a1e-8f55-123456789abc'
+      'c39b8214-41d3-4a1e-8f55-123456789abc',
     ],
     type: [String],
   })
@@ -38,7 +38,11 @@ export class CreateProductDto {
     if (value === undefined || value === null || value === '') return undefined;
 
     // Trường hợp gửi JSON string từ Postman hoặc Frontend: '["uuid-1", "uuid-2"]'
-    if (typeof value === 'string' && value.trim().startsWith('[') && value.trim().endsWith(']')) {
+    if (
+      typeof value === 'string' &&
+      value.trim().startsWith('[') &&
+      value.trim().endsWith(']')
+    ) {
       try {
         return JSON.parse(value);
       } catch {
@@ -60,7 +64,10 @@ export class CreateProductDto {
   })
   @IsOptional()
   @IsArray({ message: 'materialIds phải là một mảng danh sách!' })
-  @IsUUID('all', { each: true, message: 'Mỗi phần tử trong mảng phải là định dạng UUID hợp lệ!' })
+  @IsUUID('all', {
+    each: true,
+    message: 'Mỗi phần tử trong mảng phải là định dạng UUID hợp lệ!',
+  })
   materialIds?: string[];
 
   @ApiProperty({

@@ -10,7 +10,7 @@ export class RoleService {
   constructor(
     @InjectRepository(Role)
     private readonly roleRepository: Repository<Role>,
-  ) { }
+  ) {}
 
   async create(createRoleDto: CreateRoleDto): Promise<Role> {
     const newRole = this.roleRepository.create(createRoleDto);
