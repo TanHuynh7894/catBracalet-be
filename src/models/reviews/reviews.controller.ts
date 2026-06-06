@@ -6,12 +6,14 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 import { CreateReviewDto } from './dto/create-review.dto';
@@ -36,6 +38,43 @@ export class ReviewsController {
   @ApiOkResponse({ type: Review, isArray: true })
   findAll() {
     return this.reviewsService.findAll();
+  }
+
+  @Get('product/:productId')
+  @ApiOperation({ summary: 'Get active reviews by product id' })
+  @ApiParam({ name: 'productId', description: 'Product UUID' })
+  @ApiOkResponse({ type: Review, isArray: true })
+  getReviewsByProduct(@Param('productId') productId: string) {
+    return this.reviewsService.getReviewsByProduct(productId);
+  }
+
+  @Get('user/:userId')
+  @ApiOperation({ summary: 'Get reviews by user id' })
+  @ApiParam({ name: 'userId', description: 'User UUID' })
+  @ApiOkResponse({ type: Review, isArray: true })
+  getReviewsByUser(@Param('userId') userId: string) {
+    return this.reviewsService.getReviewsByUser(userId);
+  }
+
+  @Get('order/:orderId')
+  @ApiOperation({
+    summary: 'Get reviews by order id from reviewed products in the order',
+  })
+  @ApiParam({ name: 'orderId', description: 'Order UUID' })
+  @ApiOkResponse({ type: Review, isArray: true })
+  getReviewsByOrder(@Param('orderId') orderId: string) {
+    return this.reviewsService.getReviewsByOrder(orderId);
+  }
+
+  @Get('verify-purchase')
+  @ApiOperation({ summary: 'Verify user can review a purchased product' })
+  @ApiQuery({ name: 'userId', description: 'User UUID' })
+  @ApiQuery({ name: 'productId', description: 'Product UUID' })
+  verifyPurchaseBeforeReview(
+    @Query('userId') userId: string,
+    @Query('productId') productId: string,
+  ) {
+    return this.reviewsService.verifyPurchaseBeforeReview(userId, productId);
   }
 
   @Get(':id')
