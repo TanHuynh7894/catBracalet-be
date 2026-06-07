@@ -34,18 +34,14 @@ export class VipService {
 
   // 2. getCurrentVipLevel(userId)
   async getCurrentVipLevel(userId: string) {
-    await this.syncUserVipProgress(userId);
+    const result = await this.updateVipLevelFromTotalSpending(userId);
 
-    const user = await this.userRepository.findOne({
-      where: { id: userId },
-      relations: ['vipLevel'],
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    return user.vipLevel;
+    return {
+      userId,
+      totalSpending: result.totalSpending,
+      vipLevelId: result.vipLevelId,
+      vipLevel: result.vipLevel,
+    };
   }
 
   async getUserVipProgress(userId: string) {
@@ -89,6 +85,7 @@ export class VipService {
     const vipHistoryRepository = entityManager.getRepository(VipHistory);
 
     await this.syncVipPolicyLevels(vipLevelRepository);
+    await this.normalizeVipHistoryReasons(vipHistoryRepository);
 
     const user = await userRepository.findOne({ where: { id: userId } });
     if (!user) {
@@ -111,20 +108,10 @@ export class VipService {
 
     const accumulatedSpending = Number(spendingResult?.total ?? 0);
 
-    const matchedVipLevel =
-      accumulatedSpending > 0
-        ? await vipLevelRepository
-            .createQueryBuilder('vipLevel')
-            .where('vipLevel.status = :status', { status: 'ACTIVE' })
-            .andWhere('vipLevel.levelName IN (:...levelNames)', {
-              levelNames: VIP_LEVEL_POLICIES.map((policy) => policy.levelName),
-            })
-            .andWhere('vipLevel.minSpending <= :accumulatedSpending', {
-              accumulatedSpending,
-            })
-            .orderBy('vipLevel.minSpending', 'DESC')
-            .getOne()
-        : null;
+    const matchedVipLevel = await this.findVipLevelBySpending(
+      vipLevelRepository,
+      accumulatedSpending,
+    );
 
     const oldVipLevelId = user.vipLevelId ?? null;
     const newVipLevelId = matchedVipLevel?.id ?? null;
@@ -142,7 +129,7 @@ export class VipService {
           userId,
           oldLevelId: oldVipLevelId,
           newLevelId: newVipLevelId,
-          reason: `VIP progress synced for ${now.getFullYear()}`,
+          reason: 'Mua đủ để thăng tiến lên',
         }),
       );
     }
@@ -162,6 +149,74 @@ export class VipService {
     return this.syncUserVipProgress(userId, manager);
   }
 
+  async updateVipLevelFromTotalSpending(
+    userId: string,
+    manager?: EntityManager,
+  ) {
+    const entityManager = manager ?? this.dataSource.manager;
+    const userRepository = entityManager.getRepository(User);
+    const vipLevelRepository = entityManager.getRepository(VipLevel);
+    const vipHistoryRepository = entityManager.getRepository(VipHistory);
+
+    await this.syncVipPolicyLevels(vipLevelRepository);
+
+    const user = await userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const currentTotalSpending = Number(user.totalSpending ?? 0);
+    const matchedVipLevel = await this.findVipLevelBySpending(
+      vipLevelRepository,
+      currentTotalSpending,
+    );
+
+    const oldVipLevelId = user.vipLevelId ?? null;
+    const newVipLevelId = matchedVipLevel?.id ?? null;
+
+    if (oldVipLevelId !== newVipLevelId) {
+      await userRepository.update(userId, {
+        vipLevelId: newVipLevelId,
+        vipUpdatedAt: new Date(),
+      });
+
+      await vipHistoryRepository.save(
+        vipHistoryRepository.create({
+          userId,
+          oldLevelId: oldVipLevelId,
+          newLevelId: newVipLevelId,
+          reason: 'Mua đủ để thăng tiến lên',
+        }),
+      );
+    }
+
+    return {
+      userId,
+      totalSpending: currentTotalSpending,
+      vipLevelId: newVipLevelId,
+      vipLevel: matchedVipLevel,
+    };
+  }
+
+  private async findVipLevelBySpending(
+    vipLevelRepository: Repository<VipLevel>,
+    totalSpending: number,
+  ) {
+    if (totalSpending <= 0) {
+      return null;
+    }
+
+    return vipLevelRepository
+      .createQueryBuilder('vipLevel')
+      .where('vipLevel.status = :status', { status: 'ACTIVE' })
+      .andWhere('vipLevel.levelName IN (:...levelNames)', {
+        levelNames: VIP_LEVEL_POLICIES.map((policy) => policy.levelName),
+      })
+      .andWhere('vipLevel.minSpending <= :totalSpending', { totalSpending })
+      .orderBy('vipLevel.minSpending', 'DESC')
+      .getOne();
+  }
+
   private async syncVipPolicyLevels(vipLevelRepository: Repository<VipLevel>) {
     const policyLevelNames = VIP_LEVEL_POLICIES.map(
       (policy) => policy.levelName,
@@ -169,7 +224,7 @@ export class VipService {
 
     for (const policy of VIP_LEVEL_POLICIES) {
       const benefits = [
-        `Minimum order amount: ${policy.minimumOrderAmount}`,
+        `Dieu kien don: ${policy.minimumOrderAmount}`,
         policy.benefits,
       ].join('. ');
 
@@ -216,62 +271,21 @@ export class VipService {
       .execute();
   }
 
-  // 3. setUserVipLevel(userId, vipLevelId)
-  async setUserVipLevel(userId: string, vipLevelId: string, reason?: string) {
-    const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    const newLevel = await this.vipLevelRepository.findOne({
-      where: { id: vipLevelId },
-    });
-    if (!newLevel) {
-      throw new NotFoundException('VIP Level not found');
-    }
-
-    const oldLevelId = user.vipLevelId;
-
-    // Update user direct to DB
-    await this.userRepository.update(userId, {
-      vipLevelId: vipLevelId,
-      vipUpdatedAt: new Date(),
-    });
-
-    // 4. createVipHistory() - integrated logic
-    await this.createVipHistory(
-      userId,
-      oldLevelId,
-      vipLevelId,
-      reason || 'Manual update',
-    );
-
-    const updatedUser = await this.userRepository.findOne({
-      where: { id: userId },
-      relations: ['vipLevel'],
-    });
-
-    return updatedUser?.vipLevel ?? null;
-  }
-
-  // 4. createVipHistory()
-  async createVipHistory(
-    userId: string,
-    oldLevelId: string,
-    newLevelId: string,
-    reason: string,
+  private async normalizeVipHistoryReasons(
+    vipHistoryRepository: Repository<VipHistory>,
   ) {
-    const history = this.vipHistoryRepository.create({
-      userId,
-      oldLevelId,
-      newLevelId,
-      reason,
-    });
-    return await this.vipHistoryRepository.save(history);
+    await vipHistoryRepository
+      .createQueryBuilder()
+      .update(VipHistory)
+      .set({ reason: 'Mua đủ để thăng tiến lên' })
+      .where('reason LIKE :reason', { reason: 'VIP progress synced%' })
+      .execute();
   }
 
-  // 5. getVipHistoryByUser(userId)
+  // 3. getVipHistoryByUser(userId)
   async getVipHistoryByUser(userId: string) {
+    await this.normalizeVipHistoryReasons(this.vipHistoryRepository);
+
     return await this.vipHistoryRepository.find({
       where: { userId },
       relations: ['oldLevel', 'newLevel'],

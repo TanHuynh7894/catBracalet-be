@@ -1,7 +1,6 @@
-import { Controller, Get, Body, Param, Patch } from '@nestjs/common';
+import { Controller, Get, Param } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { VipService } from './vip.service';
-import { SetVipLevelDto } from './dto/set-vip-level.dto';
 
 @ApiTags('VIP')
 @Controller('vip')
@@ -26,19 +25,6 @@ export class VipController {
   })
   getUserVipProgress(@Param('userId') userId: string) {
     return this.vipService.getUserVipProgress(userId);
-  }
-
-  @Patch('user/:userId')
-  @ApiOperation({ summary: 'Set VIP level for a user' })
-  setUserVipLevel(
-    @Param('userId') userId: string,
-    @Body() body: SetVipLevelDto,
-  ) {
-    return this.vipService.setUserVipLevel(
-      userId,
-      body.vipLevelId,
-      body.reason,
-    );
   }
 
   @Get('history/:userId')
