@@ -1,16 +1,18 @@
-import { IsString, IsIn } from 'class-validator';
+import { IsIn, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { ORDER_STATUSES } from '../constants/order-status.constants';
+import type { OrderStatus } from '../constants/order-status.constants';
 
 export class UpdateOrderStatusDto {
   @ApiProperty({
     example: 'CONFIRMED',
-    description: 'Trạng thái mới của đơn hàng',
-    enum: ['PENDING', 'CONFIRMED', 'SHIPPING', 'COMPLETED', 'CANCELLED'],
+    description: 'New order status',
+    enum: ORDER_STATUSES,
   })
   @IsString()
-  @IsIn(['PENDING', 'CONFIRMED', 'SHIPPING', 'COMPLETED', 'CANCELLED'], {
+  @IsIn(ORDER_STATUSES, {
     message:
-      'Trạng thái không hợp lệ. Phải là một trong các giá trị: PENDING, CONFIRMED, SHIPPING, COMPLETED, CANCELLED',
+      'Invalid status. Must be one of: PENDING, CONFIRMED, SHIPPING, DELIVERED, CANCELLED',
   })
-  status: string;
+  status: OrderStatus;
 }

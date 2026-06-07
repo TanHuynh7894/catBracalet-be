@@ -17,6 +17,10 @@ import { Vouchers } from '../vouchers/entities/vouchers.entity';
 import { UserAddress } from '../user_address/entities/user_address.entity';
 import { VouchersService } from '../vouchers/vouchers.service';
 import { ShipmentService } from '../shipment/shipment.service';
+import {
+  ORDER_STATUSES,
+  OrderStatus,
+} from './constants/order-status.constants';
 
 interface CalculatedOrderItem {
   variantId: string;
@@ -154,7 +158,7 @@ export class OrdersService {
   /**
    * 2. Cập nhật trạng thái đơn hàng (Admin)
    */
-  async updateOrderStatus(orderId: string, newStatus: string) {
+  async updateOrderStatus(orderId: string, newStatus: OrderStatus) {
     return await this.dataSource.transaction(async (manager: EntityManager) => {
       const order = await manager.findOne(Order, { where: { id: orderId } });
       if (!order) throw new NotFoundException('Không tìm thấy đơn hàng');
@@ -168,7 +172,7 @@ export class OrdersService {
       order.status = newStatus;
       const savedOrder = await manager.save(order);
 
-      if (newStatus === 'COMPLETED') {
+      if (newStatus === 'DELIVERED') {
         this.triggerVipUpdate(order.userId);
       }
 
@@ -195,13 +199,17 @@ export class OrdersService {
    */
   private validateOrderStatusTransition(
     currentStatus: string,
-    nextStatus: string,
+    nextStatus: OrderStatus,
   ) {
-    const validTransitions: Record<string, string[]> = {
+    if (!ORDER_STATUSES.includes(nextStatus)) {
+      throw new BadRequestException(`Trang thai khong hop le: ${nextStatus}`);
+    }
+
+    const validTransitions: Record<string, OrderStatus[]> = {
       PENDING: ['CONFIRMED', 'CANCELLED'],
       CONFIRMED: ['SHIPPING', 'CANCELLED'],
-      SHIPPING: ['COMPLETED'],
-      COMPLETED: [],
+      SHIPPING: ['DELIVERED'],
+      DELIVERED: [],
       CANCELLED: [],
     };
 
@@ -425,6 +433,7 @@ export class OrdersService {
 
     const newOrder = this.orderRepository.create({
       ...orderData,
+      status: orderData.status ?? 'PENDING',
       createdAt: new Date(),
     });
 

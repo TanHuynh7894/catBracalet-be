@@ -1,7 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { CreateOrderItemDto } from './create-order-item.dto';
 import { Type } from 'class-transformer';
-import { ValidateNested, IsOptional } from 'class-validator';
+import { IsIn, IsOptional, ValidateNested } from 'class-validator';
+import { ORDER_STATUSES } from '../constants/order-status.constants';
+import type { OrderStatus } from '../constants/order-status.constants';
 
 export class CreateOrderDto {
   @ApiProperty({
@@ -25,8 +27,14 @@ export class CreateOrderDto {
   @ApiProperty({ example: 100.5, description: 'The total amount of the order' })
   totalAmount: number;
 
-  @ApiProperty({ example: 'PENDING', description: 'The status of the order' })
-  status: string;
+  @ApiPropertyOptional({
+    example: 'PENDING',
+    description: 'The status of the order',
+    enum: ORDER_STATUSES,
+  })
+  @IsOptional()
+  @IsIn(ORDER_STATUSES)
+  status?: OrderStatus;
 
   @ApiPropertyOptional({ type: [CreateOrderItemDto] })
   @IsOptional()

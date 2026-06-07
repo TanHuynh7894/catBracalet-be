@@ -108,10 +108,10 @@ export class ReviewsService {
 
     if (
       orderItem.order.userId !== userId ||
-      orderItem.order.status !== 'COMPLETED'
+      orderItem.order.status !== 'DELIVERED'
     ) {
       throw new BadRequestException(
-        'User can only review items from their completed orders',
+        'User can only review items from their delivered orders',
       );
     }
 
