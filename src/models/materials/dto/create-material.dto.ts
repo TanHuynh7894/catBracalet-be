@@ -22,7 +22,7 @@ export class CreateMaterialDto {
   })
   @IsOptional()
   @IsString()
-  @MaxLength(100)
+  @MaxLength(50)
   materialType?: string;
 
   @ApiPropertyOptional({

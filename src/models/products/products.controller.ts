@@ -10,6 +10,7 @@ import {
   UseInterceptors,
   ParseUUIDPipe,
   BadRequestException,
+  Query, // 1. Import thêm Query
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -30,6 +31,7 @@ import {
   getImageUploadOptions,
   buildImagePublicUrl,
 } from '../../helpers/upload-image.helper';
+import { FilterProductDto } from './dto/FilterProduct.dto';
 
 /**
  * Hàm helper dùng để xử lý dữ liệu materialIds truyền lên từ multipart/form-data.
@@ -115,6 +117,14 @@ export class ProductsController {
   @ApiOkResponse({ type: Product, isArray: true })
   findAll() {
     return this.productsService.findAll();
+  }
+
+  // 3. THÊM ENDPOINT LỌC SẢN PHẨM Ở ĐÂY (Đặt trước Get(':id'))
+  @Get('filter')
+  @ApiOperation({ summary: 'Filter products by variants (color, stone type, size, price)' })
+  @ApiOkResponse({ type: Product, isArray: true })
+  filterProducts(@Query() filterDto: FilterProductDto) {
+    return this.productsService.filterProducts(filterDto);
   }
 
   @Get('by-name/:name')

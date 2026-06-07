@@ -22,7 +22,7 @@ export class Material {
   @Column({ length: 255, name: 'material_name' })
   materialName: string;
 
-  @Column({ length: 100, name: 'material_type', nullable: true })
+  @Column({ length: 50, name: 'material_type', nullable: true })
   materialType?: string;
 
   @Column({ length: 100, nullable: true })
