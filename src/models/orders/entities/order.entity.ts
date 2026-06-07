@@ -40,7 +40,7 @@ export class Order {
   @Column('decimal', { name: 'total_amount', precision: 15, scale: 2 })
   totalAmount: number;
 
-  @Column('varchar', { name: 'status', length: 50 })
+  @Column('varchar', { name: 'status', length: 30 })
   status: string;
 
   @Column('timestamp', { name: 'created_at' })

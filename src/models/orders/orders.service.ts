@@ -17,6 +17,11 @@ import { Vouchers } from '../vouchers/entities/vouchers.entity';
 import { UserAddress } from '../user_address/entities/user_address.entity';
 import { VouchersService } from '../vouchers/vouchers.service';
 import { ShipmentService } from '../shipment/shipment.service';
+import { VipService } from '../VIP/vip.service';
+import {
+  ORDER_STATUSES,
+  OrderStatus,
+} from './constants/order-status.constants';
 
 interface CalculatedOrderItem {
   variantId: string;
@@ -44,6 +49,7 @@ export class OrdersService {
     private readonly addressRepository: Repository<UserAddress>,
     private readonly vouchersService: VouchersService,
     private readonly shipmentService: ShipmentService,
+    private readonly vipService: VipService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -154,7 +160,7 @@ export class OrdersService {
   /**
    * 2. Cập nhật trạng thái đơn hàng (Admin)
    */
-  async updateOrderStatus(orderId: string, newStatus: string) {
+  async updateOrderStatus(orderId: string, newStatus: OrderStatus) {
     return await this.dataSource.transaction(async (manager: EntityManager) => {
       const order = await manager.findOne(Order, { where: { id: orderId } });
       if (!order) throw new NotFoundException('Không tìm thấy đơn hàng');
@@ -168,8 +174,8 @@ export class OrdersService {
       order.status = newStatus;
       const savedOrder = await manager.save(order);
 
-      if (newStatus === 'COMPLETED') {
-        this.triggerVipUpdate(order.userId);
+      if (newStatus === 'DELIVERED') {
+        await this.vipService.syncUserVipProgress(order.userId, manager);
       }
 
       return savedOrder;
@@ -195,13 +201,17 @@ export class OrdersService {
    */
   private validateOrderStatusTransition(
     currentStatus: string,
-    nextStatus: string,
+    nextStatus: OrderStatus,
   ) {
-    const validTransitions: Record<string, string[]> = {
+    if (!ORDER_STATUSES.includes(nextStatus)) {
+      throw new BadRequestException(`Trang thai khong hop le: ${nextStatus}`);
+    }
+
+    const validTransitions: Record<string, OrderStatus[]> = {
       PENDING: ['CONFIRMED', 'CANCELLED'],
       CONFIRMED: ['SHIPPING', 'CANCELLED'],
-      SHIPPING: ['COMPLETED'],
-      COMPLETED: [],
+      SHIPPING: ['DELIVERED'],
+      DELIVERED: [],
       CANCELLED: [],
     };
 
@@ -222,10 +232,6 @@ export class OrdersService {
   /**
    * Helper: Trigger cập nhật hạng thành viên VIP (Mở rộng sau)
    */
-  private triggerVipUpdate(userId: string) {
-    console.log(`Triggering VIP update logic for user: ${userId}`);
-  }
-
   /**
    * Validate cart, stock, variants, voucher, and address
    */
@@ -425,6 +431,7 @@ export class OrdersService {
 
     const newOrder = this.orderRepository.create({
       ...orderData,
+      status: orderData.status ?? 'PENDING',
       createdAt: new Date(),
     });
 
@@ -556,8 +563,15 @@ export class OrdersService {
       .getMany();
   }
 
-  update(id: string, updateOrderDto: UpdateOrderDto) {
-    return this.orderRepository.update(id, updateOrderDto);
+  async update(id: string, updateOrderDto: UpdateOrderDto) {
+    const updateResult = await this.orderRepository.update(id, updateOrderDto);
+
+    const order = await this.orderRepository.findOne({ where: { id } });
+    if (order?.status === 'DELIVERED') {
+      await this.vipService.syncUserVipProgress(order.userId);
+    }
+
+    return updateResult;
   }
 
   remove(id: string) {
