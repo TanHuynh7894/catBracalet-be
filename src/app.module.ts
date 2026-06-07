@@ -19,8 +19,12 @@ import { VipModule } from './models/VIP/vip.module';
 import { AuthModule } from './auth/auth.module';
 import { CartModule } from './models/carts/cart.module';
 import { OrdersModule } from './models/orders/orders.module';
+<<<<<<< HEAD
 import { ProductMaterialsModule } from './models/product-materials/product-materials.module';
 import { ConsultationRegistrationsModule } from './models/consultation-registrations/consultation-registrations.module';
+=======
+import { ShipmentModule } from './models/shipment/shipment.module';
+>>>>>>> 8eadd5784d025a92a5e8ac039711199b49a63d5e
 
 @Module({
   imports: [
@@ -76,8 +80,12 @@ import { ConsultationRegistrationsModule } from './models/consultation-registrat
     VipModule,
     CartModule,
     OrdersModule,
+<<<<<<< HEAD
     ProductMaterialsModule,
     ConsultationRegistrationsModule,
+=======
+    ShipmentModule,
+>>>>>>> 8eadd5784d025a92a5e8ac039711199b49a63d5e
   ],
   controllers: [AppController],
   providers: [AppService],

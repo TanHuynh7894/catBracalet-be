@@ -11,7 +11,8 @@ export class UploadAvatarDto {
   avatar?: any;
 
   @ApiProperty({
-    description: 'Bắt buộc điền chữ "A" để hệ thống đẩy ảnh vào đúng thư mục avatar',
+    description:
+      'Bắt buộc điền chữ "A" để hệ thống đẩy ảnh vào đúng thư mục avatar',
     example: 'A',
   })
   @IsString()

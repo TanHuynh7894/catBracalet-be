@@ -56,12 +56,15 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       // 2. Kiểm tra xem Passport có giải mã thành công thực thể user từ Strategy hay không
       if (!user) {
         const infoMessage = typeof info === 'string' ? info : info?.message;
-        console.warn('[JWT.AUTH.GUARD] Authentication failed:', infoMessage || 'No user payload found');
-        
+        console.warn(
+          '[JWT.AUTH.GUARD] Authentication failed:',
+          infoMessage || 'No user payload found',
+        );
+
         throw new UnauthorizedException(
-          infoMessage && infoMessage.includes('jwt expired') 
-            ? 'Token đã hết hạn, vui lòng refresh token' 
-            : 'Mã xác thực không hợp lệ hoặc đã hết hạn'
+          infoMessage && infoMessage.includes('jwt expired')
+            ? 'Token đã hết hạn, vui lòng refresh token'
+            : 'Mã xác thực không hợp lệ hoặc đã hết hạn',
         );
       }
 

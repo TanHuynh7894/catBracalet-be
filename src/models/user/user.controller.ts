@@ -43,12 +43,12 @@ import { AddUserRoleDto } from './dto/add-user-role.dto';
 import { RemoveUserRoleDto } from './dto/remove-user-role.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 // (Bạn có thể bỏ file upload-avatar.dto.ts nếu không còn dùng tới fields nào khác ngoài file ảnh)
-import { UploadAvatarDto } from './dto/upload-avatar.dto'; 
+import { UploadAvatarDto } from './dto/upload-avatar.dto';
 
-import { 
-  getImageUploadOptions, 
-  buildImagePublicUrl, 
-  UploadImageType 
+import {
+  getImageUploadOptions,
+  buildImagePublicUrl,
+  UploadImageType,
 } from '../../helpers/upload-image.helper';
 
 @ApiTags('User')
@@ -141,13 +141,20 @@ export class UserController {
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Upload or update avatar for user',
-    description: 'Nhận tệp ảnh nhị phân và tự động lưu vào thư mục images/avatar',
+    description:
+      'Nhận tệp ảnh nhị phân và tự động lưu vào thư mục images/avatar',
   })
   @ApiParam({ name: 'id', description: 'User UUID' })
   @ApiBody({ type: UploadAvatarDto })
-  @ApiResponse({ status: 200, description: 'Avatar updated successfully', type: User })
+  @ApiResponse({
+    status: 200,
+    description: 'Avatar updated successfully',
+    type: User,
+  })
   // 💡 Gắn cứng UploadImageType.AVATAR vào ngay đây
-  @UseInterceptors(FileInterceptor('avatar', getImageUploadOptions(UploadImageType.AVATAR)))
+  @UseInterceptors(
+    FileInterceptor('avatar', getImageUploadOptions(UploadImageType.AVATAR)),
+  )
   async uploadAvatar(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @UploadedFile() file: Express.Multer.File,
@@ -164,11 +171,21 @@ export class UserController {
   }
 
   @Post()
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Create a new user (Admin)',
     description: 'Directly create a user in the database',
   })
-  create(@Body() createUserDto: CreateUserDto) {
+  @UseInterceptors(
+    FileInterceptor('avatar', getImageUploadOptions(UploadImageType.AVATAR)),
+  )
+  async create(
+    @Body() createUserDto: CreateUserDto,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (file) {
+      createUserDto.avatar = buildImagePublicUrl(file.path);
+    }
     return this.userService.create(createUserDto);
   }
 
@@ -195,14 +212,22 @@ export class UserController {
   @Patch('profile/:id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Update user profile',
     description: 'Update basic profile information for a user',
   })
+  @UseInterceptors(
+    FileInterceptor('avatar', getImageUploadOptions(UploadImageType.AVATAR)),
+  )
   updateProfile(
-    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, 
-    @Body() updateDto: UpdateUserDto
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() updateDto: UpdateUserDto,
+    @UploadedFile() file: Express.Multer.File,
   ) {
+    if (file) {
+      updateDto.avatar = buildImagePublicUrl(file.path);
+    }
     return this.userService.updateProfile(id, updateDto);
   }
 
@@ -230,14 +255,22 @@ export class UserController {
   }
 
   @Patch(':id')
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Update user (Admin)',
     description: 'Update any user field by ID',
   })
+  @UseInterceptors(
+    FileInterceptor('avatar', getImageUploadOptions(UploadImageType.AVATAR)),
+  )
   update(
-    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string, 
-    @Body() updateUserDto: UpdateUserDto
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() updateUserDto: UpdateUserDto,
+    @UploadedFile() file: Express.Multer.File,
   ) {
+    if (file) {
+      updateUserDto.avatar = buildImagePublicUrl(file.path);
+    }
     return this.userService.update(id, updateUserDto);
   }
 
@@ -247,8 +280,8 @@ export class UserController {
     description: 'Assign a specific role to a user',
   })
   addRole(
-    @Param('id', new ParseUUIDPipe({ version: '4' })) userId: string, 
-    @Body() addUserRoleDto: AddUserRoleDto
+    @Param('id', new ParseUUIDPipe({ version: '4' })) userId: string,
+    @Body() addUserRoleDto: AddUserRoleDto,
   ) {
     return this.userService.addRoleToUser(userId, addUserRoleDto.roleId);
   }
