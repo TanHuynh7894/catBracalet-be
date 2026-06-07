@@ -9,6 +9,7 @@ import {
   Query,
 } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
@@ -22,6 +23,7 @@ import { Review } from './entities/review.entity';
 import { ReviewsService } from './reviews.service';
 
 @ApiTags('Reviews')
+@ApiBearerAuth('JWT-auth')
 @Controller('reviews')
 export class ReviewsController {
   constructor(private readonly reviewsService: ReviewsService) {}
@@ -67,14 +69,14 @@ export class ReviewsController {
   }
 
   @Get('verify-purchase')
-  @ApiOperation({ summary: 'Verify user can review a purchased product' })
+  @ApiOperation({ summary: 'Verify user can review a purchased order item' })
   @ApiQuery({ name: 'userId', description: 'User UUID' })
-  @ApiQuery({ name: 'productId', description: 'Product UUID' })
+  @ApiQuery({ name: 'orderItemId', description: 'Order item UUID' })
   verifyPurchaseBeforeReview(
     @Query('userId') userId: string,
-    @Query('productId') productId: string,
+    @Query('orderItemId') orderItemId: string,
   ) {
-    return this.reviewsService.verifyPurchaseBeforeReview(userId, productId);
+    return this.reviewsService.verifyPurchaseBeforeReview(userId, orderItemId);
   }
 
   @Get(':id')

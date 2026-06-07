@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { Product } from '../../products/entities/product.entity';
 import { User } from '../../user/entities/user.entity';
+import { OrderItem } from '../../orders/entities/order-item.entity';
 
 @Entity('reviews')
 @Check(`status IN ('ACTIVE', 'INACTIVE')`)
@@ -23,6 +24,9 @@ export class Review {
   @Column({ type: 'uuid', name: 'product_id' })
   productId: string;
 
+  @Column({ type: 'uuid', name: 'order_item_id' })
+  orderItemId: string;
+
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id', referencedColumnName: 'id' })
   user?: User;
@@ -30,6 +34,10 @@ export class Review {
   @ManyToOne(() => Product, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'product_id', referencedColumnName: 'id' })
   product?: Product;
+
+  @ManyToOne(() => OrderItem, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'order_item_id', referencedColumnName: 'id' })
+  orderItem?: OrderItem;
 
   @Column({ type: 'int', nullable: true })
   rating?: number;

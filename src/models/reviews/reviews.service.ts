@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
+import { OrderItem } from '../orders/entities/order-item.entity';
 import { Order } from '../orders/entities/order.entity';
 import { CreateReviewDto, ReviewStatus } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
@@ -17,28 +18,33 @@ export class ReviewsService {
     private readonly reviewRepository: Repository<Review>,
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
+    @InjectRepository(OrderItem)
+    private readonly orderItemRepository: Repository<OrderItem>,
   ) {}
 
   async create(createReviewDto: CreateReviewDto): Promise<Review> {
-    await this.verifyPurchaseBeforeReview(
+    const { productId } = await this.verifyPurchaseBeforeReview(
       createReviewDto.userId,
-      createReviewDto.productId,
+      createReviewDto.orderItemId,
     );
 
     const existingReview = await this.reviewRepository.findOne({
       where: {
         userId: createReviewDto.userId,
-        productId: createReviewDto.productId,
+        orderItemId: createReviewDto.orderItemId,
         status: ReviewStatus.ACTIVE,
       },
     });
 
     if (existingReview) {
-      throw new BadRequestException('User has already reviewed this product');
+      throw new BadRequestException(
+        'User has already reviewed this order item',
+      );
     }
 
     const newReview = this.reviewRepository.create({
       ...createReviewDto,
+      productId,
       status: ReviewStatus.ACTIVE,
     });
 
@@ -64,72 +70,71 @@ export class ReviewsService {
   async getReviewsByOrder(orderId: string): Promise<Review[]> {
     const order = await this.orderRepository.findOne({
       where: { id: orderId },
-      relations: [
-        'items',
-        'items.variant',
-        'items.variant.productVariantMappings',
-      ],
+      relations: ['items'],
     });
 
     if (!order) {
       throw new NotFoundException(`Order with id ${orderId} not found`);
     }
 
-    const productIds = [
-      ...new Set(
-        order.items.flatMap((item) =>
-          (item.variant.productVariantMappings ?? []).map(
-            (mapping) => mapping.productId,
-          ),
-        ),
-      ),
-    ];
+    const orderItemIds = order.items.map((item) => item.id);
 
-    if (!productIds.length) return [];
+    if (!orderItemIds.length) return [];
 
     return await this.reviewRepository.find({
       where: {
         userId: order.userId,
-        productId: In(productIds),
+        orderItemId: In(orderItemIds),
       },
-      relations: ['user', 'product'],
+      relations: ['user', 'product', 'orderItem'],
       order: { createdAt: 'DESC' },
     });
   }
 
   async verifyPurchaseBeforeReview(
     userId: string,
-    productId: string,
-  ): Promise<{ canReview: true }> {
-    const purchasedOrder = await this.orderRepository
-      .createQueryBuilder('order')
-      .innerJoin('order.items', 'item')
-      .innerJoin('item.variant', 'variant')
-      .innerJoin('variant.productVariantMappings', 'mapping')
-      .where('order.userId = :userId', { userId })
-      .andWhere('order.status = :status', { status: 'COMPLETED' })
-      .andWhere('mapping.productId = :productId', { productId })
-      .getOne();
+    orderItemId: string,
+  ): Promise<{ canReview: true; productId: string }> {
+    const orderItem = await this.orderItemRepository.findOne({
+      where: { id: orderItemId },
+      relations: ['order', 'variant', 'variant.productVariantMappings'],
+    });
 
-    if (!purchasedOrder) {
-      throw new BadRequestException(
-        'User can only review products from completed orders',
+    if (!orderItem) {
+      throw new NotFoundException(
+        `Order item with id ${orderItemId} not found`,
       );
     }
 
-    return { canReview: true };
+    if (
+      orderItem.order.userId !== userId ||
+      orderItem.order.status !== 'COMPLETED'
+    ) {
+      throw new BadRequestException(
+        'User can only review items from their completed orders',
+      );
+    }
+
+    const productId = orderItem.variant.productVariantMappings?.[0]?.productId;
+    if (!productId) {
+      throw new BadRequestException(
+        'Cannot resolve product from this order item variant',
+      );
+    }
+
+    return { canReview: true, productId };
   }
 
   async findAll(): Promise<Review[]> {
     return await this.reviewRepository.find({
-      relations: ['user', 'product'],
+      relations: ['user', 'product', 'orderItem'],
     });
   }
 
   async findOne(id: string): Promise<Review> {
     const review = await this.reviewRepository.findOne({
       where: { id },
-      relations: ['user', 'product'],
+      relations: ['user', 'product', 'orderItem'],
     });
 
     if (!review) {
