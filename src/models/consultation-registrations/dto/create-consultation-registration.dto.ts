@@ -32,10 +32,10 @@ export class CreateConsultationRegistrationDto {
   @MaxLength(20)
   phoneNumber: string;
 
-  @ApiPropertyOptional({ description: 'ID Sản phẩm quan tâm', example: '123e4567-e89b-12d3-a456-426614174000' })
-  @IsOptional()
-  @IsUUID('4')
-  productId?: string;
+  // @ApiPropertyOptional({ description: 'ID Sản phẩm quan tâm', example: '123e4567-e89b-12d3-a456-426614174000' })
+  // @IsOptional()
+  // @IsUUID('4')
+  // productId?: string;
 
   @ApiPropertyOptional({ description: 'Mục tiêu/Ghi chú mong muốn tư vấn', example: 'Cầu tài lộc, bình an' })
   @IsOptional()
