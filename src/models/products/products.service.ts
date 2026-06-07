@@ -33,25 +33,15 @@ export class ProductsService {
   private formatProductImageUrl(product: Product): Product {
     if (product && product.thumbnail) {
       // Đọc trực tiếp từ configService mỗi khi hàm chạy để đảm bảo không bị cache chuỗi rỗng
-<<<<<<< HEAD
-      const baseUrl = this.configService.get<string>('URL_BASE_BE') || 'http://localhost:3000';
-=======
-      const baseUrl =
-        this.configService.get<string>('URL_BASE_BE') ||
-        'http://localhost:3000';
->>>>>>> 8eadd5784d025a92a5e8ac039711199b49a63d5e
+      const baseUrl = this.configService.get<string>('url_base_BE') || 'http://localhost:3000';
 
       console.log('--- LOG DEBUG ---');
       console.log('KEY URL_BASE_BE ĐỌC ĐƯỢC:', baseUrl);
       console.log('THUMBNAIL GỐC TRONG DB:', product.thumbnail);
 
       // Làm sạch các dấu gạch chéo dư thừa trước khi nối chuỗi
-      const cleanBaseUrl = baseUrl.endsWith('/')
-        ? baseUrl.slice(0, -1)
-        : baseUrl;
-      const cleanThumbnail = product.thumbnail.startsWith('/')
-        ? product.thumbnail
-        : `/${product.thumbnail}`;
+      const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+      const cleanThumbnail = product.thumbnail.startsWith('/') ? product.thumbnail : `/${product.thumbnail}`;
 
       // Gán đè kết quả nối chuỗi trực tiếp
       product.thumbnail = `${cleanBaseUrl}${cleanThumbnail}`;
@@ -184,7 +174,6 @@ export class ProductsService {
 
     await this.productRepository.remove(product);
   }
-<<<<<<< HEAD
 
   async filterProducts(filterDto: FilterProductDto): Promise<Product[]> {
     // Thêm stoneColor vào lúc destructuring
@@ -230,6 +219,3 @@ export class ProductsService {
     return products.map((product) => this.formatProductImageUrl(product));
   }
 }
-=======
-}
->>>>>>> 8eadd5784d025a92a5e8ac039711199b49a63d5e
