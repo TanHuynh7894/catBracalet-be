@@ -15,11 +15,11 @@ export class CreateReviewDto {
   userId: string;
 
   @ApiProperty({
-    description: 'The product UUID being reviewed',
-    example: 'f4e560f1-7f09-49e4-bc79-cf0ef4cdbbb6',
+    description: 'The order item UUID being reviewed',
+    example: '0726e97d-8584-4b34-8c7a-983c13c8bf4a',
   })
   @IsUUID()
-  productId: string;
+  orderItemId: string;
 
   @ApiPropertyOptional({
     description: 'Rating score from 1 to 5',
