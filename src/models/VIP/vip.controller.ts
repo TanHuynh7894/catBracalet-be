@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Patch } from '@nestjs/common';
+import { Controller, Get, Body, Param, Patch } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { VipService } from './vip.service';
 import { SetVipLevelDto } from './dto/set-vip-level.dto';
@@ -18,6 +18,14 @@ export class VipController {
   @ApiOperation({ summary: 'Get current VIP level of a user' })
   getCurrentVipLevel(@Param('userId') userId: string) {
     return this.vipService.getCurrentVipLevel(userId);
+  }
+
+  @Get('user/:userId/progress')
+  @ApiOperation({
+    summary: 'Get yearly VIP progress',
+  })
+  getUserVipProgress(@Param('userId') userId: string) {
+    return this.vipService.getUserVipProgress(userId);
   }
 
   @Patch('user/:userId')

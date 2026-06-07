@@ -17,6 +17,7 @@ import { Vouchers } from '../vouchers/entities/vouchers.entity';
 import { UserAddress } from '../user_address/entities/user_address.entity';
 import { VouchersService } from '../vouchers/vouchers.service';
 import { ShipmentService } from '../shipment/shipment.service';
+import { VipService } from '../VIP/vip.service';
 import {
   ORDER_STATUSES,
   OrderStatus,
@@ -48,6 +49,7 @@ export class OrdersService {
     private readonly addressRepository: Repository<UserAddress>,
     private readonly vouchersService: VouchersService,
     private readonly shipmentService: ShipmentService,
+    private readonly vipService: VipService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -173,7 +175,7 @@ export class OrdersService {
       const savedOrder = await manager.save(order);
 
       if (newStatus === 'DELIVERED') {
-        this.triggerVipUpdate(order.userId);
+        await this.vipService.syncUserVipProgress(order.userId, manager);
       }
 
       return savedOrder;
@@ -230,10 +232,6 @@ export class OrdersService {
   /**
    * Helper: Trigger cập nhật hạng thành viên VIP (Mở rộng sau)
    */
-  private triggerVipUpdate(userId: string) {
-    console.log(`Triggering VIP update logic for user: ${userId}`);
-  }
-
   /**
    * Validate cart, stock, variants, voucher, and address
    */
@@ -565,8 +563,15 @@ export class OrdersService {
       .getMany();
   }
 
-  update(id: string, updateOrderDto: UpdateOrderDto) {
-    return this.orderRepository.update(id, updateOrderDto);
+  async update(id: string, updateOrderDto: UpdateOrderDto) {
+    const updateResult = await this.orderRepository.update(id, updateOrderDto);
+
+    const order = await this.orderRepository.findOne({ where: { id } });
+    if (order?.status === 'DELIVERED') {
+      await this.vipService.syncUserVipProgress(order.userId);
+    }
+
+    return updateResult;
   }
 
   remove(id: string) {

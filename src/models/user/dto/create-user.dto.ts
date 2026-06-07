@@ -4,7 +4,6 @@ import {
   IsString,
   IsEmail,
   IsOptional,
-  IsUrl,
   Matches,
 } from 'class-validator';
 
@@ -44,5 +43,6 @@ export class CreateUserDto {
     required: false,
   })
   @IsOptional()
-  avatar?: any;
+  @IsString()
+  avatar?: string;
 }

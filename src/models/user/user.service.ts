@@ -24,6 +24,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { OtpService } from './services/otp.service';
 import { JwtTokenService } from './services/jwt-token.service';
 import { Role } from '../role/entities/role.entity';
+import { VipService } from '../VIP/vip.service';
 
 @Injectable()
 export class UserService {
@@ -36,6 +37,7 @@ export class UserService {
     @InjectRepository(Role)
     private readonly roleRepository: Repository<Role>,
     private readonly configService: ConfigService,
+    private readonly vipService: VipService,
   ) {}
 
   /**
@@ -45,7 +47,7 @@ export class UserService {
     if (!user) return user;
 
     // Tạo bản sao shallow copy để tránh chỉnh sửa trực tiếp trên reference gốc của TypeORM
-    const userClone = { ...user } as User;
+    const userClone = { ...user };
 
     if (userClone.avatar) {
       const baseUrl =
@@ -198,14 +200,17 @@ export class UserService {
         },
       );
 
+      await this.vipService.syncUserVipProgress(user.id);
+
       const userWithRoles = await this.userRepository
         .createQueryBuilder('user')
         .leftJoinAndSelect('user.roles', 'role', 'role.name IS NOT NULL')
+        .leftJoinAndSelect('user.vipLevel', 'vipLevel')
         .where('user.id = :userId', { userId: user.id })
         .getOne();
 
       // Định dạng URL ảnh một cách an toàn thông qua bản sao Clone
-      const formattedUser = this.formatUserAvatarUrl(user);
+      const formattedUser = this.formatUserAvatarUrl(userWithRoles ?? user);
 
       const userResponse: Omit<User, 'password'> = {
         id: formattedUser.id,
@@ -421,6 +426,8 @@ export class UserService {
    * Hàm lấy chi tiết User duy nhất theo UUID
    */
   async findOne(id: string): Promise<User> {
+    await this.vipService.syncUserVipProgress(id);
+
     const user = await this.userRepository.findOne({
       where: { id },
       relations: ['roles', 'vipLevel'],
