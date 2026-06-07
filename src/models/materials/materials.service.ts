@@ -75,10 +75,22 @@ export class MaterialsService {
     return await this.materialRepository.save(material);
   }
 
+  // async softDelete(id: string): Promise<Material> {
+  //   const material = await this.findOne(id);
+
+  //   material.status = MaterialStatus.INACTIVE;
+
+  //   return await this.materialRepository.save(material);
+  // }
+
+  // Toggle status (Thay thế cho softDelete cũ)
   async softDelete(id: string): Promise<Material> {
     const material = await this.findOne(id);
 
-    material.status = MaterialStatus.INACTIVE;
+    // Nếu đang ACTIVE thì chuyển thành INACTIVE, ngược lại thì thành ACTIVE
+    material.status = material.status === MaterialStatus.ACTIVE 
+      ? MaterialStatus.INACTIVE 
+      : MaterialStatus.ACTIVE;
 
     return await this.materialRepository.save(material);
   }
