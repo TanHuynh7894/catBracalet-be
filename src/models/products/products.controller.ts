@@ -27,15 +27,11 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Product } from './entities/product.entity';
 import { ProductsService } from './products.service';
-<<<<<<< HEAD
-import { getImageUploadOptions, buildImagePublicUrl } from '../../helpers/upload-image.helper';
-import { FilterProductDto } from './dto/FilterProduct.dto'; // 2. Import FilterProductDto
-=======
 import {
   getImageUploadOptions,
   buildImagePublicUrl,
 } from '../../helpers/upload-image.helper';
->>>>>>> 8eadd5784d025a92a5e8ac039711199b49a63d5e
+import { FilterProductDto } from './dto/FilterProduct.dto';
 
 /**
  * Hàm helper dùng để xử lý dữ liệu materialIds truyền lên từ multipart/form-data.
