@@ -13,6 +13,7 @@ import { UserAddress } from '../user_address/entities/user_address.entity';
 import { VouchersModule } from '../vouchers/vouchers.module';
 import { ShipmentModule } from '../shipment/shipment.module';
 import { VipModule } from '../VIP/vip.module';
+import { PaymentsModule } from '../payments/payments.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { VipModule } from '../VIP/vip.module';
     VouchersModule,
     ShipmentModule,
     VipModule,
+    PaymentsModule,
   ],
   controllers: [OrdersController],
 

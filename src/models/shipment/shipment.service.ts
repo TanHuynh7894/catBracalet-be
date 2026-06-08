@@ -14,6 +14,7 @@ import * as path from 'path';
 
 import { Order } from '../orders/entities/order.entity';
 import { UserAddress } from '../user_address/entities/user_address.entity';
+import { VipService } from '../VIP/vip.service';
 import { Shipment } from './entities/shipment.entity';
 import { AdminCreateShipmentDto } from './dto/admin-create-shipment.dto';
 import { CalculateFeeDto } from './dto/calculate-fee.dto';
@@ -64,6 +65,7 @@ export class ShipmentService {
     private readonly orderRepository: Repository<Order>,
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
+    private readonly vipService: VipService,
   ) {
     this.loadLocalData();
   }
@@ -386,6 +388,10 @@ export class ShipmentService {
     }
 
     const savedShipment = await this.shipmentRepository.save(shipment);
+    await this.syncOrderStatusFromGoship(
+      savedShipment.orderId,
+      savedShipment.shippingStatus,
+    );
 
     return {
       success: true,
@@ -460,6 +466,71 @@ export class ShipmentService {
     }
 
     await this.shipmentRepository.save(shipment);
+    await this.syncOrderStatusFromGoship(shipment.orderId, statusText);
+  }
+
+  private async syncOrderStatusFromGoship(
+    orderId: string,
+    goshipStatusText: string,
+  ) {
+    const nextOrderStatus = this.mapGoshipStatusToOrderStatus(goshipStatusText);
+    if (!nextOrderStatus) return;
+
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId },
+      select: { id: true, userId: true, status: true },
+    });
+
+    if (
+      !order ||
+      order.status === 'CANCELLED' ||
+      order.status === 'DELIVERED'
+    ) {
+      return;
+    }
+
+    if (nextOrderStatus === 'SHIPPING' && order.status !== 'CONFIRMED') {
+      return;
+    }
+
+    if (
+      nextOrderStatus === 'DELIVERED' &&
+      order.status !== 'CONFIRMED' &&
+      order.status !== 'SHIPPING'
+    ) {
+      return;
+    }
+
+    await this.orderRepository.update(orderId, { status: nextOrderStatus });
+
+    if (nextOrderStatus === 'DELIVERED') {
+      await this.vipService.syncUserVipProgress(order.userId);
+    }
+  }
+
+  private mapGoshipStatusToOrderStatus(
+    statusText: string,
+  ): 'SHIPPING' | 'DELIVERED' | null {
+    const normalizedStatus = statusText
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+    if (
+      normalizedStatus.includes('delivered') ||
+      normalizedStatus.includes('completed') ||
+      normalizedStatus.includes('thanh cong') ||
+      normalizedStatus.includes('da giao') ||
+      normalizedStatus.includes('giao hang thanh cong')
+    ) {
+      return 'DELIVERED';
+    }
+
+    if (!normalizedStatus) {
+      return null;
+    }
+
+    return 'SHIPPING';
   }
 
   private async validateDestinationCodes(

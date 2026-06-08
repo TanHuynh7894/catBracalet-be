@@ -18,6 +18,7 @@ import { UserAddress } from '../user_address/entities/user_address.entity';
 import { VouchersService } from '../vouchers/vouchers.service';
 import { ShipmentService } from '../shipment/shipment.service';
 import { VipService } from '../VIP/vip.service';
+import { PaymentsService } from '../payments/payments.service';
 import {
   ORDER_STATUSES,
   OrderStatus,
@@ -50,6 +51,7 @@ export class OrdersService {
     private readonly vouchersService: VouchersService,
     private readonly shipmentService: ShipmentService,
     private readonly vipService: VipService,
+    private readonly paymentsService: PaymentsService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -61,61 +63,89 @@ export class OrdersService {
     addressId: string,
     voucherCode?: string,
   ) {
-    return await this.dataSource.transaction(async (manager: EntityManager) => {
-      // 1. Validate checkout conditions
-      const { cartItems, voucher, address } = await this.validateCheckout(
-        manager,
-        userId,
-        addressId,
-        voucherCode,
-      );
-
-      // 2. Calculate order total and prepare item data
-      const { totalAmount, orderItemsData } = await this.calculateOrderTotal(
-        cartItems,
-        address,
-        voucher,
-      );
-
-      // 3. Create Order
-      const order = await this.createOrder(
-        manager,
-        userId,
-        addressId,
-        voucher?.id,
-        totalAmount,
-      );
-
-      // 4. Create Order Items
-      await this.createOrderItems(manager, order.id, orderItemsData);
-
-      // 5. Apply Voucher (Reduce voucher quantity) - Gọi qua VoucherService
-      if (voucher) {
-        await this.vouchersService.decrementVoucherQuantity(
-          voucher.id,
+    const checkoutResult = await this.dataSource.transaction(
+      async (manager: EntityManager) => {
+        // 1. Validate checkout conditions
+        const { cartItems, voucher, address } = await this.validateCheckout(
           manager,
+          userId,
+          addressId,
+          voucherCode,
         );
-      }
 
-      // 6. Deduct Stock from product variants
-      await this.deductStock(manager, cartItems);
+        // 2. Calculate order total and prepare item data
+        const {
+          totalAmount,
+          subtotal,
+          shippingFee,
+          discountAmount,
+          orderItemsData,
+        } = await this.calculateOrderTotal(cartItems, address, voucher);
 
-      // 7. Clear Cart Items
-      await this.clearCart(manager, userId);
+        // 3. Create Order
+        const order = await this.createOrder(
+          manager,
+          userId,
+          addressId,
+          voucher?.id,
+          totalAmount,
+        );
 
-      return await manager.findOne(Order, {
-        where: { id: order.id },
-        relations: [
-          'user',
-          'address',
-          'voucher',
-          'items',
-          'items.variant',
-          'items.variant.productVariantMappings',
-          'items.variant.productVariantMappings.product',
-        ],
-      });
-    });
+        // 4. Create Order Items
+        await this.createOrderItems(manager, order.id, orderItemsData);
+
+        // 5. Apply Voucher (Reduce voucher quantity) - Gọi qua VoucherService
+        if (voucher) {
+          await this.vouchersService.decrementVoucherQuantity(
+            voucher.id,
+            manager,
+          );
+        }
+
+        // 6. Deduct Stock from product variants
+        await this.deductStock(manager, cartItems);
+
+        // 7. Clear Cart Items
+        await this.clearCart(manager, userId);
+
+        const createdOrder = await manager.findOne(Order, {
+          where: { id: order.id },
+          relations: [
+            'user',
+            'address',
+            'voucher',
+            'items',
+            'items.variant',
+            'items.variant.productVariantMappings',
+            'items.variant.productVariantMappings.product',
+          ],
+        });
+
+        return {
+          order: createdOrder,
+          pricing: {
+            subtotal,
+            shippingFee,
+            discountAmount,
+            totalAmount,
+          },
+        };
+      },
+    );
+
+    if (!checkoutResult.order) {
+      throw new NotFoundException('Order was not created successfully');
+    }
+
+    const payment = await this.paymentsService.createOSPayment(
+      checkoutResult.order.id,
+    );
+
+    return {
+      order: checkoutResult.order,
+      pricing: checkoutResult.pricing,
+      payment,
+    };
   }
 
   /**
@@ -341,7 +371,15 @@ export class OrdersService {
       totalAmount = subtotal - discountAmount;
     }
 
-    return { totalAmount, subtotal, discountAmount, orderItemsData };
+    totalAmount = Math.round(totalAmount);
+
+    return {
+      totalAmount,
+      subtotal,
+      shippingFee,
+      discountAmount,
+      orderItemsData,
+    };
   }
 
   private async calculateCustomerShippingFee(
@@ -544,6 +582,29 @@ export class OrdersService {
         'items.variant.productVariantMappings.product',
       ],
     });
+  }
+
+  async getCurrentOrderStatus(id: string) {
+    const order = await this.orderRepository.findOne({
+      where: { id },
+      select: {
+        id: true,
+        status: true,
+        totalAmount: true,
+        createdAt: true,
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with id ${id} not found`);
+    }
+
+    return {
+      orderId: order.id,
+      status: order.status,
+      totalAmount: Number(order.totalAmount),
+      createdAt: order.createdAt,
+    };
   }
 
   async getOrdersByTime(startDate: Date, endDate: Date) {

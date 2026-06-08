@@ -19,7 +19,6 @@ import { OrdersService } from './orders.service';
 import { CheckoutDto } from './dto/checkout.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
-import { CreateOrderItemDto } from './dto/create-order-item.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
@@ -88,6 +87,14 @@ export class OrdersController {
   })
   getOrdersByStatus(@Param('status') status: string) {
     return this.ordersService.getOrdersByStatus(status);
+  }
+
+  @Get(':id/current-status')
+  @ApiOperation({
+    summary: 'Láº¥y tráº¡ng thÃ¡i hiá»‡n táº¡i cá»§a Ä‘Æ¡n hÃ ng',
+  })
+  getCurrentOrderStatus(@Param('id') id: string) {
+    return this.ordersService.getCurrentOrderStatus(id);
   }
 
   @Get('filter/time')

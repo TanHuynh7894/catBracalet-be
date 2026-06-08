@@ -14,6 +14,8 @@ import { Order } from '../orders/entities/order.entity';
 import { Payments } from './entities/payments.entity';
 
 const MAX_GENERATE_ATTEMPTS = 20;
+const MIN_ORDER_CODE = 100_000_000;
+const MAX_INTEGER_ORDER_CODE = 2_147_483_647;
 
 export interface PayOSPaymentLinkInfo {
   orderCode: number;
@@ -62,7 +64,7 @@ export class PaymentsService {
       throw new NotFoundException(`Order with id ${orderId} not found`);
     }
 
-    const amount = Number(order.totalAmount);
+    const amount = Math.round(Number(order.totalAmount));
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new NotFoundException(
         `Order total amount is invalid for ${orderId}`,
@@ -99,6 +101,7 @@ export class PaymentsService {
       orderId,
       orderCode,
       amount,
+      paymentAmountSource: 'orders.totalAmount',
       checkoutUrl: paymentLink.checkoutUrl,
       paymentLinkId: paymentLink.paymentLinkId,
     };
@@ -187,10 +190,10 @@ export class PaymentsService {
       return { success: false, message: 'Order record not found' };
     }
 
-    if (order.status === 'CONFIRMED') {
+    if (order.status !== 'PENDING') {
       return {
         success: true,
-        message: 'Duplicate webhook ignored',
+        message: `Payment webhook ignored because order is already ${order.status}`,
       };
     }
 
@@ -311,7 +314,11 @@ export class PaymentsService {
 
   private async generateUniqueOrderCode(): Promise<number> {
     for (let attempt = 0; attempt < MAX_GENERATE_ATTEMPTS; attempt += 1) {
-      const orderCode = Date.now() + Math.floor(Math.random() * 1000);
+      const orderCode =
+        MIN_ORDER_CODE +
+        Math.floor(
+          Math.random() * (MAX_INTEGER_ORDER_CODE - MIN_ORDER_CODE + 1),
+        );
 
       const existing = await this.paymentsRepository.findOne({
         where: { orderCode },
