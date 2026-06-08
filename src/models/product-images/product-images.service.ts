@@ -21,7 +21,7 @@ export class ProductImagesService {
     private readonly configService: ConfigService,
     @InjectRepository(ProductImage)
     private readonly productImageRepository: Repository<ProductImage>,
-  ) {}
+  ) { }
 
   async create(
     createProductImageDto: CreateProductImageDto,
@@ -102,13 +102,26 @@ export class ProductImagesService {
     return this.toPublicImageUrl(updatedProductImage);
   }
 
+  // async softDelete(id: string): Promise<ProductImage> {
+  //   const productImage = await this.findOneEntity(id);
+
+  //   productImage.status = ProductImageStatus.INACTIVE;
+
+  //   const updatedProductImage =
+  //     await this.productImageRepository.save(productImage);
+
+  //   return this.toPublicImageUrl(updatedProductImage);
+  // }
+
   async softDelete(id: string): Promise<ProductImage> {
     const productImage = await this.findOneEntity(id);
 
-    productImage.status = ProductImageStatus.INACTIVE;
+    productImage.status = productImage.status === ProductImageStatus.INACTIVE
+      ? ProductImageStatus.ACTIVE
+      : ProductImageStatus.INACTIVE;
 
-    const updatedProductImage =
-      await this.productImageRepository.save(productImage);
+    // 3. Lưu vào database
+    const updatedProductImage = await this.productImageRepository.save(productImage);
 
     return this.toPublicImageUrl(updatedProductImage);
   }
