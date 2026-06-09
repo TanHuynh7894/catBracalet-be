@@ -56,6 +56,34 @@ export class PaymentsService {
     return '';
   }
 
+  private normalizeUrl(value: string): string {
+    return value.replace(/\/+$/, '');
+  }
+
+  private getPaymentRedirectUrl(
+    configKey: 'PAYOS_RETURN_URL' | 'PAYOS_CANCEL_URL',
+    fallbackPath: string,
+  ): string {
+    const configuredUrl = this.configService.get<string>(configKey)?.trim();
+
+    if (configuredUrl) {
+      return configuredUrl;
+    }
+
+    const redirectBaseUrl =
+      this.configService.get<string>('PAYOS_REDIRECT_BASE_URL')?.trim() ||
+      this.configService.get<string>('url_base_FE')?.trim() ||
+      this.configService.get<string>('url_base_BE')?.trim();
+
+    if (!redirectBaseUrl) {
+      throw new InternalServerErrorException(
+        'Missing payment redirect URL configuration',
+      );
+    }
+
+    return `${this.normalizeUrl(redirectBaseUrl)}${fallbackPath}`;
+  }
+
   async createOSPayment(orderId: string) {
     const order = await this.orderRepository.findOne({
       where: { id: orderId },
@@ -86,8 +114,14 @@ export class PaymentsService {
 
     await this.paymentsRepository.save(paymentRecord);
 
-    const returnUrl = 'https://truongnguyen.me/successfulpayment';
-    const cancelUrl = 'https://truongnguyen.me/payment/cancel';
+    const returnUrl = this.getPaymentRedirectUrl(
+      'PAYOS_RETURN_URL',
+      '/successfulpayment',
+    );
+    const cancelUrl = this.getPaymentRedirectUrl(
+      'PAYOS_CANCEL_URL',
+      '/payment/cancel',
+    );
 
     const paymentLink = await this.payOS.paymentRequests.create({
       orderCode,

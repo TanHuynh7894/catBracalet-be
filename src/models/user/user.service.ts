@@ -51,6 +51,7 @@ export class UserService {
 
     if (userClone.avatar) {
       const baseUrl =
+        this.configService.get<string>('url_base_BE') ||
         this.configService.get<string>('URL_BASE_BE') ||
         'http://localhost:3000';
       const cleanBaseUrl = baseUrl.endsWith('/')
