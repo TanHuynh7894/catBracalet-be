@@ -44,8 +44,11 @@ type ParcelOptions = Omit<CalculateFeeDto, 'city' | 'district' | 'ward'>;
 interface GoshipRateResponse {
   id: string;
   carrier_name: string;
+  carrier_code?: string;
+  carrier_short_name?: string;
   carrier_logo?: string;
   service?: string;
+  service_code?: string;
   service_name?: string;
   expected?: string;
   expected_txt?: string;
@@ -55,6 +58,20 @@ interface GoshipRateResponse {
 }
 
 type GoshipObject = Record<string, unknown>;
+
+export interface NormalizedGoshipRate {
+  id: string;
+  carrier_name: string;
+  carrier_code: string | null;
+  carrier_short_name: string | null;
+  carrier_logo?: string;
+  service: string | null;
+  service_code: string | null;
+  expected: string | null;
+  cod_fee: number;
+  total_fee: number;
+  total_amount: number;
+}
 
 @Injectable()
 export class ShipmentService {
@@ -307,12 +324,15 @@ export class ShipmentService {
     const response = await this.postToGoship('/rates', payload);
     const rates = this.extractGoshipData<GoshipRateResponse[]>(response, []);
 
-    return rates.map((rate) => ({
+    return rates.map((rate): NormalizedGoshipRate => ({
       id: rate.id,
       carrier_name: rate.carrier_name,
+      carrier_code: rate.carrier_code ?? null,
+      carrier_short_name: rate.carrier_short_name ?? null,
       carrier_logo: rate.carrier_logo,
-      service: rate.service ?? rate.service_name,
-      expected: rate.expected ?? rate.expected_txt,
+      service: rate.service_name ?? rate.service ?? null,
+      service_code: rate.service_code ?? null,
+      expected: rate.expected_txt ?? rate.expected ?? null,
       cod_fee: Number(rate.cod_fee ?? 0),
       total_fee: Number(rate.total_fee ?? 0),
       total_amount: Number(rate.total_amount ?? rate.total_fee ?? 0),
@@ -359,8 +379,59 @@ export class ShipmentService {
       status: order.status,
       declaredAmount,
       destination: destinationAddress,
+      carriers: this.groupRatesByCarrier(rates),
       rates,
     };
+  }
+
+  private groupRatesByCarrier(rates: NormalizedGoshipRate[]) {
+    const carriers = new Map<
+      string,
+      {
+        carrier_name: string;
+        carrier_code: string | null;
+        carrier_short_name: string | null;
+        carrier_logo?: string;
+        services: {
+          rateId: string;
+          service: string | null;
+          service_code: string | null;
+          expected: string | null;
+          price: number;
+          cod_fee: number;
+          total_amount: number;
+        }[];
+      }
+    >();
+
+    for (const rate of rates) {
+      const carrierKey =
+        rate.carrier_code ??
+        rate.carrier_short_name ??
+        rate.carrier_name ??
+        rate.id;
+      const carrier = carriers.get(carrierKey) ?? {
+        carrier_name: rate.carrier_name,
+        carrier_code: rate.carrier_code,
+        carrier_short_name: rate.carrier_short_name,
+        carrier_logo: rate.carrier_logo,
+        services: [],
+      };
+
+      carrier.services.push({
+        rateId: rate.id,
+        service: rate.service,
+        service_code: rate.service_code,
+        expected: rate.expected,
+        price: rate.total_fee,
+        cod_fee: rate.cod_fee,
+        total_amount: rate.total_amount,
+      });
+
+      carriers.set(carrierKey, carrier);
+    }
+
+    return [...carriers.values()];
   }
 
   async createShipment(dto: AdminCreateShipmentDto) {
