@@ -152,6 +152,19 @@ export class ProductsService {
     return this.findOne(id);
   }
 
+  // async softDelete(id: string): Promise<Product> {
+  //   const product = await this.productRepository.findOne({ where: { id } });
+
+  //   if (!product) {
+  //     throw new NotFoundException(`Product with id ${id} not found`);
+  //   }
+
+  //   product.status = ProductStatus.INACTIVE;
+  //   const savedProduct = await this.productRepository.save(product);
+
+  //   return this.findOne(savedProduct.id);
+  // }
+
   async softDelete(id: string): Promise<Product> {
     const product = await this.productRepository.findOne({ where: { id } });
 
@@ -159,7 +172,11 @@ export class ProductsService {
       throw new NotFoundException(`Product with id ${id} not found`);
     }
 
-    product.status = ProductStatus.INACTIVE;
+    // Toggle trạng thái giữa ACTIVE và INACTIVE
+    product.status = product.status === ProductStatus.INACTIVE
+      ? ProductStatus.ACTIVE
+      : ProductStatus.INACTIVE;
+
     const savedProduct = await this.productRepository.save(product);
 
     return this.findOne(savedProduct.id);
@@ -201,8 +218,8 @@ export class ProductsService {
     // 3. Lọc Kích cỡ (Nằm trong bảng variant)
     if (size) {
       query.innerJoin('product_variant_mapping', 'mapping', 'mapping.product_id = product.id')
-           .innerJoin('product_variants', 'variant', 'variant.id = mapping.variant_id')
-           .andWhere('variant.size = :size', { size });
+        .innerJoin('product_variants', 'variant', 'variant.id = mapping.variant_id')
+        .andWhere('variant.size = :size', { size });
     }
 
     // 4. Lọc giá tiền (Nằm ở bảng Product)
