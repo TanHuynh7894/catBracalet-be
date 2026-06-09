@@ -9,6 +9,7 @@ import {
   Post,
   Req,
   UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -20,8 +21,12 @@ import {
 import { Request } from 'express';
 import { createHmac, timingSafeEqual } from 'crypto';
 
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
 import { AdminCreateShipmentDto } from './dto/admin-create-shipment.dto';
-import { CalculateFeeDto } from './dto/calculate-fee.dto';
+import { CalculateAddressFeeDto } from './dto/calculate-address-fee.dto';
+import { CalculateOrderRatesDto } from './dto/calculate-order-rates.dto';
 import { GoshipWebhookDto } from './dto/goship-webhook.dto';
 import { ShipmentService } from './shipment.service';
 
@@ -52,22 +57,31 @@ export class ShipmentController {
   @Post('calculate-client')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Calculate client shipping fee from the cheapest Goship rate',
+    summary:
+      'Calculate estimated client shipping fee from Goship average rates',
   })
-  calculateForClient(@Body() dto: CalculateFeeDto) {
-    return this.shipmentService.calculateFeeForClient(dto);
+  calculateForClient(@Body() dto: CalculateAddressFeeDto) {
+    return this.shipmentService.calculateFeeForClientAddress(dto);
   }
 
-  @Post('calculate-admin')
+  @Post('orders/:orderId/rates')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'STAFF')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Calculate all Goship rates so shop owner can compare carriers',
+    summary:
+      'Calculate Goship rates for a confirmed order so staff can choose carrier/service',
   })
-  calculateForAdmin(@Body() dto: CalculateFeeDto) {
-    return this.shipmentService.calculateFeeForAdmin(dto);
+  calculateRatesForOrder(
+    @Param('orderId') orderId: string,
+    @Body() dto: CalculateOrderRatesDto,
+  ) {
+    return this.shipmentService.calculateRatesForOrder(orderId, dto);
   }
 
   @Post('create')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'STAFF')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create a Goship shipment from selected rate id' })
   createShipment(@Body() dto: AdminCreateShipmentDto) {

@@ -1,14 +1,17 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { VipLevel } from './entities/vip-level.entity';
 import { VipHistory } from './entities/vip-history.entity';
 import { User } from '../user/entities/user.entity';
 import { Order } from '../orders/entities/order.entity';
-import {
-  VIP_ACCUMULATION_PERIOD,
-  VIP_LEVEL_POLICIES,
-} from './constants/vip-policy.constants';
+import { VIP_ACCUMULATION_PERIOD } from './constants/vip-policy.constants';
+import { CreateVipLevelDto } from './dto/create-vip-level.dto';
+import { UpdateVipLevelDto } from './dto/update-vip-level.dto';
 
 @Injectable()
 export class VipService {
@@ -24,23 +27,93 @@ export class VipService {
 
   // 1. getVipLevels()
   async getVipLevels() {
-    await this.syncVipPolicyLevels(this.vipLevelRepository);
-
     return await this.vipLevelRepository.find({
       where: { status: 'ACTIVE' },
       order: { minSpending: 'ASC' },
     });
   }
 
+  async getAllVipLevels() {
+    return this.vipLevelRepository.find({
+      order: { minSpending: 'ASC' },
+    });
+  }
+
+  async getVipLevelById(id: string) {
+    const vipLevel = await this.vipLevelRepository.findOne({
+      where: { id },
+    });
+    if (!vipLevel) {
+      throw new NotFoundException(`VIP level with id ${id} not found`);
+    }
+
+    return vipLevel;
+  }
+
+  async createVipLevel(createVipLevelDto: CreateVipLevelDto) {
+    await this.ensureUniqueLevelName(createVipLevelDto.levelName);
+
+    const vipLevel = this.vipLevelRepository.create({
+      ...createVipLevelDto,
+      status: createVipLevelDto.status ?? 'ACTIVE',
+    });
+    const savedLevel = await this.vipLevelRepository.save(vipLevel);
+
+    await this.syncAllUsersVipProgress();
+
+    return savedLevel;
+  }
+
+  async updateVipLevel(id: string, updateVipLevelDto: UpdateVipLevelDto) {
+    const vipLevel = await this.getVipLevelById(id);
+
+    if (
+      updateVipLevelDto.levelName &&
+      updateVipLevelDto.levelName !== vipLevel.levelName
+    ) {
+      await this.ensureUniqueLevelName(updateVipLevelDto.levelName, id);
+    }
+
+    await this.vipLevelRepository.update(id, updateVipLevelDto);
+    const updatedLevel = await this.getVipLevelById(id);
+
+    await this.syncAllUsersVipProgress();
+
+    return updatedLevel;
+  }
+
+  async deleteVipLevel(id: string) {
+    const vipLevel = await this.getVipLevelById(id);
+
+    if (vipLevel.status === 'INACTIVE') {
+      return vipLevel;
+    }
+
+    await this.vipLevelRepository.update(id, { status: 'INACTIVE' });
+    const deletedLevel = await this.getVipLevelById(id);
+
+    await this.syncAllUsersVipProgress();
+
+    return deletedLevel;
+  }
+
   // 2. getCurrentVipLevel(userId)
   async getCurrentVipLevel(userId: string) {
-    const result = await this.updateVipLevelFromTotalSpending(userId);
+    const result = await this.syncUserVipProgress(userId);
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['vipLevel'],
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
 
     return {
       userId,
       totalSpending: result.totalSpending,
       vipLevelId: result.vipLevelId,
-      vipLevel: result.vipLevel,
+      vipLevel: user.vipLevel,
     };
   }
 
@@ -84,7 +157,6 @@ export class VipService {
     const vipLevelRepository = entityManager.getRepository(VipLevel);
     const vipHistoryRepository = entityManager.getRepository(VipHistory);
 
-    await this.syncVipPolicyLevels(vipLevelRepository);
     await this.normalizeVipHistoryReasons(vipHistoryRepository);
 
     const user = await userRepository.findOne({ where: { id: userId } });
@@ -158,8 +230,6 @@ export class VipService {
     const vipLevelRepository = entityManager.getRepository(VipLevel);
     const vipHistoryRepository = entityManager.getRepository(VipHistory);
 
-    await this.syncVipPolicyLevels(vipLevelRepository);
-
     const user = await userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException('User not found');
@@ -209,66 +279,9 @@ export class VipService {
     return vipLevelRepository
       .createQueryBuilder('vipLevel')
       .where('vipLevel.status = :status', { status: 'ACTIVE' })
-      .andWhere('vipLevel.levelName IN (:...levelNames)', {
-        levelNames: VIP_LEVEL_POLICIES.map((policy) => policy.levelName),
-      })
       .andWhere('vipLevel.minSpending <= :totalSpending', { totalSpending })
       .orderBy('vipLevel.minSpending', 'DESC')
       .getOne();
-  }
-
-  private async syncVipPolicyLevels(vipLevelRepository: Repository<VipLevel>) {
-    const policyLevelNames = VIP_LEVEL_POLICIES.map(
-      (policy) => policy.levelName,
-    );
-
-    for (const policy of VIP_LEVEL_POLICIES) {
-      const benefits = [
-        `Dieu kien don: ${policy.minimumOrderAmount}`,
-        policy.benefits,
-      ].join('. ');
-
-      const existingLevel = await vipLevelRepository.findOne({
-        where: { levelName: policy.levelName },
-      });
-
-      if (existingLevel) {
-        const shouldUpdate =
-          Number(existingLevel.minSpending) !== policy.minSpending ||
-          Number(existingLevel.discountPercent) !== policy.discountPercent ||
-          existingLevel.benefits !== benefits ||
-          existingLevel.status !== 'ACTIVE';
-
-        if (shouldUpdate) {
-          await vipLevelRepository.update(existingLevel.id, {
-            minSpending: policy.minSpending,
-            discountPercent: policy.discountPercent,
-            benefits,
-            status: 'ACTIVE',
-          });
-        }
-
-        continue;
-      }
-
-      await vipLevelRepository.save(
-        vipLevelRepository.create({
-          levelName: policy.levelName,
-          minSpending: policy.minSpending,
-          discountPercent: policy.discountPercent,
-          benefits,
-          status: 'ACTIVE',
-        }),
-      );
-    }
-
-    await vipLevelRepository
-      .createQueryBuilder()
-      .update(VipLevel)
-      .set({ status: 'INACTIVE' })
-      .where('level_name NOT IN (:...policyLevelNames)', { policyLevelNames })
-      .andWhere('status = :status', { status: 'ACTIVE' })
-      .execute();
   }
 
   private async normalizeVipHistoryReasons(
@@ -291,5 +304,32 @@ export class VipService {
       relations: ['oldLevel', 'newLevel'],
       order: { changedAt: 'DESC' },
     });
+  }
+
+  async syncAllUsersVipProgress() {
+    const users = await this.userRepository.find({
+      select: { id: true },
+      where: { status: 'ACTIVE' },
+    });
+
+    const results = [];
+    for (const user of users) {
+      results.push(await this.syncUserVipProgress(user.id));
+    }
+
+    return {
+      syncedUsers: results.length,
+      results,
+    };
+  }
+
+  private async ensureUniqueLevelName(levelName: string, excludeId?: string) {
+    const existingLevel = await this.vipLevelRepository.findOne({
+      where: { levelName },
+    });
+
+    if (existingLevel && existingLevel.id !== excludeId) {
+      throw new BadRequestException(`VIP level ${levelName} already exists`);
+    }
   }
 }

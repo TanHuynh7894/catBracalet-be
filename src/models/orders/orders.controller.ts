@@ -18,7 +18,6 @@ import {
 import { OrdersService } from './orders.service';
 import { CheckoutDto } from './dto/checkout.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
-import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
@@ -34,8 +33,13 @@ export class OrdersController {
   @Post('checkout')
   @ApiOperation({ summary: 'Xử lý thanh toán đơn hàng (User)' })
   handleCheckout(@Body() checkoutDto: CheckoutDto) {
-    const { userId, addressId, voucherCode } = checkoutDto;
-    return this.ordersService.handleCheckout(userId, addressId, voucherCode);
+    const { userId, addressId, voucherCode, cartItemIds } = checkoutDto;
+    return this.ordersService.handleCheckout(
+      userId,
+      addressId,
+      voucherCode,
+      cartItemIds,
+    );
   }
 
   @Patch(':orderId/cancel')
@@ -57,12 +61,13 @@ export class OrdersController {
     );
   }
 
-  @Post()
+  @Patch(':orderId/confirm')
+  @Roles('ADMIN', 'STAFF')
   @ApiOperation({
-    summary: 'Tạo đơn hàng mới (kèm danh sách sản phẩm từ giỏ hàng)',
+    summary: 'Staff confirms a paid order before shipment creation',
   })
-  createOrder(@Body() createOrderDto: CreateOrderDto) {
-    return this.ordersService.createOrder_legacy(createOrderDto);
+  confirmOrder(@Param('orderId') orderId: string) {
+    return this.ordersService.confirmOrder(orderId);
   }
 
   @Get()

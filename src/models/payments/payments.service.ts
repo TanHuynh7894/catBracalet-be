@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -107,6 +108,33 @@ export class PaymentsService {
     };
   }
 
+  async retryPayment(orderId: string) {
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId },
+      select: { id: true, status: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with id ${orderId} not found`);
+    }
+
+    if (order.status === 'CANCELLED' || order.status === 'DELIVERED') {
+      throw new BadRequestException(
+        `Cannot retry payment for order with status ${order.status}`,
+      );
+    }
+
+    const paidPayment = await this.paymentsRepository.findOne({
+      where: { orderId, paymentStatus: 'PAID' },
+    });
+
+    if (paidPayment) {
+      throw new BadRequestException('Order has already been paid');
+    }
+
+    return this.createOSPayment(orderId);
+  }
+
   verifyPaymentWebhookWithSDK(body: Record<string, unknown>): {
     orderCode: number;
     reference: string | null;
@@ -206,19 +234,14 @@ export class PaymentsService {
       await this.paymentsRepository.save(payment);
     }
 
-    try {
-      await this.orderRepository.update(
-        { id: payment.orderId },
-        { status: 'CONFIRMED' },
-      );
-
-      return { success: true };
-    } catch {
-      throw new HttpException(
-        'Failed to update order record',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
+    return {
+      success: true,
+      message:
+        'Payment marked as paid. Order is still pending staff confirmation.',
+      orderId: payment.orderId,
+      orderStatus: order.status,
+      paymentStatus: payment.paymentStatus,
+    };
   }
 
   private async getPaymentLinkInfoSafe(

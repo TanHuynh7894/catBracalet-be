@@ -41,6 +41,14 @@ export class PaymentsController {
     return this.paymentsService.createOSPayment(body.orderId);
   }
 
+  @Post('retry')
+  @ApiOperation({ summary: 'Create a new PayOS payment link for unpaid order' })
+  @ApiBody({ type: CreatePayosPaymentDto })
+  @ApiCreatedResponse({ type: CreatePaymentResponseDto })
+  retry(@Body() body: CreatePayosPaymentDto) {
+    return this.paymentsService.retryPayment(body.orderId);
+  }
+
   @Public() // 💡 Route này là Webhook từ cổng PayOS gọi về nên ông đã để Public, không lo bị chặn bởi khóa
   @Post('webhook')
   @HttpCode(HttpStatus.OK)

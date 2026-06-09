@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsUUID } from 'class-validator';
+import { IsArray, IsOptional, IsString, IsUUID } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CheckoutDto {
@@ -14,4 +14,15 @@ export class CheckoutDto {
   @IsOptional()
   @IsString()
   voucherCode?: string;
+
+  @ApiProperty({
+    description:
+      'Danh sach cart_item_id muon thanh toan. Bo trong de thanh toan toan bo gio hang.',
+    required: false,
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  cartItemIds?: string[];
 }

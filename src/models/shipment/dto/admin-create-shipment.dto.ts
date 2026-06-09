@@ -92,17 +92,6 @@ export class AdminCreateShipmentDto {
   cod?: number;
 
   @ApiProperty({
-    example: 500000,
-    description: 'Declared parcel value in VND',
-    required: false,
-  })
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  @IsOptional()
-  amount?: number;
-
-  @ApiProperty({
     example: 'Hang trang suc, vui long giao nhe tay.',
     description: 'Shipment note/metadata',
     required: false,

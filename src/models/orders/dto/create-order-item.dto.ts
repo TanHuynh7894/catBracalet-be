@@ -13,9 +13,4 @@ export class CreateOrderItemDto {
   @IsNumber()
   @IsPositive()
   quantity: number;
-
-  @ApiProperty({ example: 49.99, description: 'The unit price of the item' })
-  @IsNumber()
-  @IsPositive()
-  unitPrice: number;
 }

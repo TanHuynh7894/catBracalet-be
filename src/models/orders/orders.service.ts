@@ -4,54 +4,40 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, EntityManager } from 'typeorm';
+import { Repository, DataSource, EntityManager, In } from 'typeorm';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { CreateOrderItemDto } from './dto/create-order-item.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { Order } from './entities/order.entity';
-import { OrderItem } from './entities/order-item.entity';
 import { Cart } from '../carts/entities/cart.entity';
 import { CartItem } from '../cart_items/entities/cart-item.entity';
-import { ProductVariant } from '../product-variants/entities/product-variant.entity';
 import { Vouchers } from '../vouchers/entities/vouchers.entity';
 import { UserAddress } from '../user_address/entities/user_address.entity';
 import { VouchersService } from '../vouchers/vouchers.service';
 import { ShipmentService } from '../shipment/shipment.service';
 import { VipService } from '../VIP/vip.service';
 import { PaymentsService } from '../payments/payments.service';
+import { Payments } from '../payments/entities/payments.entity';
+import { OrderItemsService } from '../order-items/order-items.service';
 import {
   ORDER_STATUSES,
   OrderStatus,
 } from './constants/order-status.constants';
-
-interface CalculatedOrderItem {
-  variantId: string;
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;
-}
 
 @Injectable()
 export class OrdersService {
   constructor(
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
-    @InjectRepository(OrderItem)
-    private readonly orderItemRepository: Repository<OrderItem>,
+    @InjectRepository(Payments)
+    private readonly paymentsRepository: Repository<Payments>,
     @InjectRepository(Cart)
     private readonly cartRepository: Repository<Cart>,
-    @InjectRepository(CartItem)
-    private readonly cartItemRepository: Repository<CartItem>,
-    @InjectRepository(ProductVariant)
-    private readonly productVariantRepository: Repository<ProductVariant>,
-    @InjectRepository(Vouchers)
-    private readonly voucherRepository: Repository<Vouchers>,
-    @InjectRepository(UserAddress)
-    private readonly addressRepository: Repository<UserAddress>,
     private readonly vouchersService: VouchersService,
     private readonly shipmentService: ShipmentService,
     private readonly vipService: VipService,
     private readonly paymentsService: PaymentsService,
+    private readonly orderItemsService: OrderItemsService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -62,6 +48,7 @@ export class OrdersService {
     userId: string,
     addressId: string,
     voucherCode?: string,
+    cartItemIds?: string[],
   ) {
     const checkoutResult = await this.dataSource.transaction(
       async (manager: EntityManager) => {
@@ -71,6 +58,7 @@ export class OrdersService {
           userId,
           addressId,
           voucherCode,
+          cartItemIds,
         );
 
         // 2. Calculate order total and prepare item data
@@ -79,7 +67,7 @@ export class OrdersService {
           subtotal,
           shippingFee,
           discountAmount,
-          orderItemsData,
+          orderItems,
         } = await this.calculateOrderTotal(cartItems, address, voucher);
 
         // 3. Create Order
@@ -92,7 +80,11 @@ export class OrdersService {
         );
 
         // 4. Create Order Items
-        await this.createOrderItems(manager, order.id, orderItemsData);
+        await this.orderItemsService.createForOrder(
+          order.id,
+          orderItems,
+          manager,
+        );
 
         // 5. Apply Voucher (Reduce voucher quantity) - Gọi qua VoucherService
         if (voucher) {
@@ -103,10 +95,14 @@ export class OrdersService {
         }
 
         // 6. Deduct Stock from product variants
-        await this.deductStock(manager, cartItems);
+        await this.orderItemsService.deductStock(cartItems, manager);
 
         // 7. Clear Cart Items
-        await this.clearCart(manager, userId);
+        await this.clearCart(
+          manager,
+          userId,
+          cartItems.map((item) => item.id),
+        );
 
         const createdOrder = await manager.findOne(Order, {
           where: { id: order.id },
@@ -172,7 +168,7 @@ export class OrdersService {
       order.status = 'CANCELLED';
       await manager.save(order);
 
-      await this.restoreStock(manager, order.items);
+      await this.orderItemsService.restoreStock(order.items, manager);
 
       // Hoàn lại voucher - Gọi qua VoucherService
       if (order.voucherId) {
@@ -197,6 +193,10 @@ export class OrdersService {
 
       this.validateOrderStatusTransition(order.status, newStatus);
 
+      if (newStatus === 'CONFIRMED') {
+        await this.ensureOrderPaid(orderId);
+      }
+
       if (newStatus === 'CANCELLED') {
         return await this.cancelOrder(orderId);
       }
@@ -213,22 +213,25 @@ export class OrdersService {
   }
 
   /**
-   * Helper: Hoàn lại tồn kho cho các Variant
+   * Helper: Validate logic chuyển đổi status
    */
-  private async restoreStock(manager: EntityManager, items: OrderItem[]) {
-    for (const item of items) {
-      await manager.increment(
-        ProductVariant,
-        { id: item.variantId },
-        'stockQuantity',
-        item.quantity,
+  async confirmOrder(orderId: string) {
+    return this.updateOrderStatus(orderId, 'CONFIRMED');
+  }
+
+  private async ensureOrderPaid(orderId: string) {
+    const paidPayment = await this.paymentsRepository.findOne({
+      where: { orderId, paymentStatus: 'PAID' },
+      select: { id: true },
+    });
+
+    if (!paidPayment) {
+      throw new BadRequestException(
+        'Chua the xac nhan don hang vi don hang chua thanh toan',
       );
     }
   }
 
-  /**
-   * Helper: Validate logic chuyển đổi status
-   */
   private validateOrderStatusTransition(
     currentStatus: string,
     nextStatus: OrderStatus,
@@ -270,12 +273,13 @@ export class OrdersService {
     userId: string,
     addressId: string,
     voucherCode?: string,
+    cartItemIds?: string[],
   ) {
     const cart = await manager.findOne(Cart, { where: { userId } });
     if (!cart)
       throw new NotFoundException('Không tìm thấy giỏ hàng cho người dùng này');
 
-    const cartItems = await manager.find(CartItem, {
+    const allCartItems = await manager.find(CartItem, {
       where: { cartId: cart.id },
       relations: [
         'variant',
@@ -284,8 +288,26 @@ export class OrdersService {
       ],
     });
 
+    const selectedCartItemIds = new Set(cartItemIds ?? []);
+    const cartItems = selectedCartItemIds.size
+      ? allCartItems.filter((item) => selectedCartItemIds.has(item.id))
+      : allCartItems;
+
+    if (
+      selectedCartItemIds.size &&
+      cartItems.length !== selectedCartItemIds.size
+    ) {
+      throw new BadRequestException(
+        'Một hoặc nhiều sản phẩm được chọn không tồn tại trong giỏ hàng',
+      );
+    }
+
     if (!cartItems.length) {
-      throw new BadRequestException('Giỏ hàng trống, không thể thanh toán');
+      throw new BadRequestException(
+        selectedCartItemIds.size
+          ? 'Không có sản phẩm hợp lệ nào được chọn để thanh toán'
+          : 'Giỏ hàng trống, không thể thanh toán',
+      );
     }
 
     for (const item of cartItems) {
@@ -335,40 +357,25 @@ export class OrdersService {
     address: UserAddress,
     voucher?: Vouchers,
   ) {
-    let productSubtotal = 0;
-    const orderItemsData = cartItems.map((item) => {
-      const basePrice = Number(
-        item.variant.productVariantMappings?.[0]?.product?.basePrice || 0,
-      );
-      const extraPrice = Number(item.variant.extraPrice || 0);
-      const unitPrice = basePrice + extraPrice;
-      const totalPrice = unitPrice * item.quantity;
-
-      productSubtotal += totalPrice;
-
-      return {
-        variantId: item.variantId,
-        quantity: item.quantity,
-        unitPrice,
-        totalPrice,
-      };
-    });
+    const { items: orderItems, productSubtotal } =
+      this.orderItemsService.prepareFromCartItems(cartItems);
 
     const shippingFee = await this.calculateCustomerShippingFee(
       address,
       productSubtotal,
     );
-    const subtotal = productSubtotal + shippingFee;
-    let totalAmount = subtotal;
+    const subtotal = productSubtotal;
+    const totalBeforeDiscount = subtotal + shippingFee;
+    let totalAmount = totalBeforeDiscount;
     let discountAmount = 0;
 
     // Tính toán discount qua VoucherService
     if (voucher) {
       discountAmount = this.vouchersService.calculateVoucherDiscount(
-        subtotal,
+        totalBeforeDiscount,
         voucher,
       );
-      totalAmount = subtotal - discountAmount;
+      totalAmount = totalBeforeDiscount - discountAmount;
     }
 
     totalAmount = Math.round(totalAmount);
@@ -378,7 +385,7 @@ export class OrdersService {
       subtotal,
       shippingFee,
       discountAmount,
-      orderItemsData,
+      orderItems,
     };
   }
 
@@ -418,46 +425,21 @@ export class OrdersService {
   }
 
   /**
-   * Create order items from calculated data
-   */
-  private async createOrderItems(
-    manager: EntityManager,
-    orderId: string,
-    itemsData: CalculatedOrderItem[],
-  ) {
-    const orderItems = itemsData.map((item) =>
-      manager.create(OrderItem, {
-        orderId,
-        variantId: item.variantId,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        totalPrice: item.totalPrice,
-      }),
-    );
-    return await manager.save(orderItems);
-  }
-
-  /**
-   * Deduct stock from variants
-   */
-  private async deductStock(manager: EntityManager, cartItems: CartItem[]) {
-    for (const item of cartItems) {
-      await manager.decrement(
-        ProductVariant,
-        { id: item.variantId },
-        'stockQuantity',
-        item.quantity,
-      );
-    }
-  }
-
-  /**
    * Delete items from the user's cart
    */
 
-  private async clearCart(manager: EntityManager, userId: string) {
+  private async clearCart(
+    manager: EntityManager,
+    userId: string,
+    cartItemIds?: string[],
+  ) {
     const cart = await manager.findOne(Cart, { where: { userId } });
     if (cart) {
+      if (cartItemIds?.length) {
+        await manager.delete(CartItem, cartItemIds);
+        return;
+      }
+
       await manager.delete(CartItem, { cartId: cart.id });
     }
   }
@@ -476,16 +458,9 @@ export class OrdersService {
     const savedOrder = await this.orderRepository.save(newOrder);
 
     if (items && items.length > 0) {
-      const orderItems = items.map((item) => {
-        return this.orderItemRepository.create({
-          ...item,
-          orderId: savedOrder.id,
-          totalPrice: item.unitPrice * item.quantity,
-        });
-      });
-      await this.orderItemRepository.save(orderItems);
-
-      await this.calculateOrderTotal_legacy(savedOrder.id);
+      for (const item of items) {
+        await this.orderItemsService.createOne(savedOrder.id, item);
+      }
       return this.getOrderById(savedOrder.id);
     }
 
@@ -493,95 +468,149 @@ export class OrdersService {
   }
 
   async createOrderItem(orderId: string, itemData: CreateOrderItemDto) {
-    const totalPrice = itemData.unitPrice * itemData.quantity;
-    const orderItem = this.orderItemRepository.create({
-      ...itemData,
-      orderId,
-      totalPrice,
-    });
-    const savedItem = await this.orderItemRepository.save(orderItem);
-
-    await this.calculateOrderTotal_legacy(orderId);
-
-    return savedItem;
+    return this.orderItemsService.createOne(orderId, itemData);
   }
 
   async calculateOrderTotal_legacy(orderId: string) {
-    const items = await this.orderItemRepository.find({
-      where: { orderId },
-    });
-
-    const totalAmount = items.reduce(
-      (sum, item) => sum + Number(item.totalPrice),
-      0,
-    );
-
-    await this.orderRepository.update(orderId, { totalAmount });
-
-    return totalAmount;
+    return this.orderItemsService.recalculateOrderTotal(orderId);
   }
 
-  findAll() {
-    return this.orderRepository.find({
-      relations: [
-        'user',
-        'address',
-        'voucher',
-        'items',
-        'items.variant',
-        'items.variant.productVariantMappings',
-        'items.variant.productVariantMappings.product',
-      ],
+  private getOrderRelations() {
+    return [
+      'user',
+      'address',
+      'voucher',
+      'items',
+      'items.variant',
+      'items.variant.productVariantMappings',
+      'items.variant.productVariantMappings.product',
+    ];
+  }
+
+  private summarizePayment(payments: Payments[]) {
+    const paidPayment = payments.find(
+      (payment) => payment.paymentStatus === 'PAID',
+    );
+    const latestPayment = paidPayment ?? payments[payments.length - 1] ?? null;
+
+    return {
+      paymentStatus: latestPayment?.paymentStatus ?? 'UNPAID',
+      paymentOrderCode: latestPayment?.orderCode ?? null,
+      paidAt: latestPayment?.paidAt ?? null,
+    };
+  }
+
+  private canRetryPayment(order: Order, paymentStatus: string) {
+    return (
+      paymentStatus !== 'PAID' &&
+      order.status !== 'CANCELLED' &&
+      order.status !== 'DELIVERED'
+    );
+  }
+
+  private getOrderProductSubtotal(order: Order) {
+    return (order.items ?? []).reduce(
+      (total, item) => total + Number(item.totalPrice ?? 0),
+      0,
+    );
+  }
+
+  private getEstimatedShippingFee(order: Order) {
+    const totalAmount = Number(order.totalAmount ?? 0);
+    const productSubtotal = this.getOrderProductSubtotal(order);
+    const voucher = order.voucher;
+
+    if (!voucher) {
+      return Math.max(0, Math.round(totalAmount - productSubtotal));
+    }
+
+    if (voucher.discountType === 'FIXED') {
+      const discountValue = Number(voucher.discountValue ?? 0);
+      return Math.max(0, Math.round(totalAmount + discountValue - productSubtotal));
+    }
+
+    if (voucher.discountType === 'PERCENT') {
+      const discountPercent = Number(voucher.discountValue ?? 0);
+      const payableRate = 1 - discountPercent / 100;
+
+      if (payableRate <= 0) return 0;
+
+      return Math.max(0, Math.round(totalAmount / payableRate - productSubtotal));
+    }
+
+    return Math.max(0, Math.round(totalAmount - productSubtotal));
+  }
+
+  private formatOrderResponse(order: Order, payments: Payments[] = []) {
+    const payment = this.summarizePayment(payments);
+
+    return {
+      ...order,
+      totalAmount: Number(order.totalAmount),
+      shippingFee: this.getEstimatedShippingFee(order),
+      ...payment,
+      canRetryPayment: this.canRetryPayment(order, payment.paymentStatus),
+    };
+  }
+
+  private async formatOrderListResponse(orders: Order[]) {
+    if (!orders.length) return [];
+
+    const payments = await this.paymentsRepository.find({
+      where: { orderId: In(orders.map((order) => order.id)) },
     });
+
+    const paymentsByOrderId = new Map<string, Payments[]>();
+    for (const payment of payments) {
+      const orderPayments = paymentsByOrderId.get(payment.orderId) ?? [];
+      orderPayments.push(payment);
+      paymentsByOrderId.set(payment.orderId, orderPayments);
+    }
+
+    return orders.map((order) =>
+      this.formatOrderResponse(order, paymentsByOrderId.get(order.id) ?? []),
+    );
+  }
+
+  async findAll() {
+    const orders = await this.orderRepository.find({
+      relations: this.getOrderRelations(),
+    });
+
+    return this.formatOrderListResponse(orders);
   }
 
   async getOrderById(id: string) {
     const order = await this.orderRepository.findOne({
       where: { id },
-      relations: [
-        'user',
-        'address',
-        'voucher',
-        'items',
-        'items.variant',
-        'items.variant.productVariantMappings',
-        'items.variant.productVariantMappings.product',
-      ],
+      relations: this.getOrderRelations(),
     });
     if (!order) {
       throw new NotFoundException(`Order with id ${id} not found`);
     }
-    return order;
+    const payments = await this.paymentsRepository.find({
+      where: { orderId: order.id },
+    });
+
+    return this.formatOrderResponse(order, payments);
   }
 
   async getOrdersByUser(userId: string) {
-    return this.orderRepository.find({
+    const orders = await this.orderRepository.find({
       where: { userId },
-      relations: [
-        'user',
-        'address',
-        'voucher',
-        'items',
-        'items.variant',
-        'items.variant.productVariantMappings',
-        'items.variant.productVariantMappings.product',
-      ],
+      relations: this.getOrderRelations(),
     });
+
+    return this.formatOrderListResponse(orders);
   }
 
   async getOrdersByStatus(status: string) {
-    return this.orderRepository.find({
+    const orders = await this.orderRepository.find({
       where: { status },
-      relations: [
-        'user',
-        'address',
-        'voucher',
-        'items',
-        'items.variant',
-        'items.variant.productVariantMappings',
-        'items.variant.productVariantMappings.product',
-      ],
+      relations: this.getOrderRelations(),
     });
+
+    return this.formatOrderListResponse(orders);
   }
 
   async getCurrentOrderStatus(id: string) {
@@ -593,22 +622,31 @@ export class OrdersService {
         totalAmount: true,
         createdAt: true,
       },
+      relations: ['items', 'voucher'],
     });
 
     if (!order) {
       throw new NotFoundException(`Order with id ${id} not found`);
     }
 
+    const payments = await this.paymentsRepository.find({
+      where: { orderId: order.id },
+    });
+    const payment = this.summarizePayment(payments);
+
     return {
       orderId: order.id,
       status: order.status,
       totalAmount: Number(order.totalAmount),
+      shippingFee: this.getEstimatedShippingFee(order),
+      ...payment,
+      canRetryPayment: this.canRetryPayment(order, payment.paymentStatus),
       createdAt: order.createdAt,
     };
   }
 
   async getOrdersByTime(startDate: Date, endDate: Date) {
-    return this.orderRepository
+    const orders = await this.orderRepository
       .createQueryBuilder('order')
       .leftJoinAndSelect('order.user', 'user')
       .leftJoinAndSelect('order.address', 'address')
@@ -622,6 +660,8 @@ export class OrdersService {
         end: endDate,
       })
       .getMany();
+
+    return this.formatOrderListResponse(orders);
   }
 
   async update(id: string, updateOrderDto: UpdateOrderDto) {

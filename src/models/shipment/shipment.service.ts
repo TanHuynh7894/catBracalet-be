@@ -17,7 +17,9 @@ import { UserAddress } from '../user_address/entities/user_address.entity';
 import { VipService } from '../VIP/vip.service';
 import { Shipment } from './entities/shipment.entity';
 import { AdminCreateShipmentDto } from './dto/admin-create-shipment.dto';
+import { CalculateAddressFeeDto } from './dto/calculate-address-fee.dto';
 import { CalculateFeeDto } from './dto/calculate-fee.dto';
+import { CalculateOrderRatesDto } from './dto/calculate-order-rates.dto';
 import { GoshipWebhookDto } from './dto/goship-webhook.dto';
 
 export interface GoshipProvince {
@@ -36,6 +38,8 @@ export interface GoshipWard {
   district_id: string;
   name: string;
 }
+
+type ParcelOptions = Omit<CalculateFeeDto, 'city' | 'district' | 'ward'>;
 
 interface GoshipRateResponse {
   id: string;
@@ -63,6 +67,8 @@ export class ShipmentService {
     private readonly shipmentRepository: Repository<Shipment>,
     @InjectRepository(Order)
     private readonly orderRepository: Repository<Order>,
+    @InjectRepository(UserAddress)
+    private readonly userAddressRepository: Repository<UserAddress>,
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
     private readonly vipService: VipService,
@@ -225,24 +231,35 @@ export class ShipmentService {
       );
     }
 
-    const cheapestRate = adminRates.reduce((currentCheapest, rate) =>
-      rate.total_fee < currentCheapest.total_fee ? rate : currentCheapest,
-    );
-
-    const markupFee = 15000;
-    const customerShippingFee = cheapestRate.total_fee + markupFee;
+    const totalFees = adminRates.map((rate) => Number(rate.total_fee));
+    const averageFee =
+      totalFees.reduce((sum, fee) => sum + fee, 0) / totalFees.length;
+    const highestFee = Math.max(...totalFees);
+    const markupFee = highestFee * 0.1;
+    const customerShippingFee = Math.round(averageFee + markupFee);
 
     return {
-      selected_rate_id: cheapestRate.id,
-      carrier_name: cheapestRate.carrier_name,
-      carrier_logo: cheapestRate.carrier_logo,
-      service: cheapestRate.service,
-      expected: cheapestRate.expected,
-      base_shipping_fee: cheapestRate.total_fee,
-      markup_fee: markupFee,
+      rate_count: adminRates.length,
+      average_shipping_fee: Math.round(averageFee),
+      highest_shipping_fee: highestFee,
+      markup_fee: Math.round(markupFee),
       total_shipping_fee: customerShippingFee,
       total_amount_to_pay: customerShippingFee,
     };
+  }
+
+  async calculateFeeForClientAddress(dto: CalculateAddressFeeDto) {
+    const address = await this.userAddressRepository.findOne({
+      where: { id: dto.addressId, status: 'ACTIVE' },
+    });
+
+    if (!address) {
+      throw new NotFoundException(
+        `Active address with id ${dto.addressId} not found`,
+      );
+    }
+
+    return this.calculateFeeForAddress(address);
   }
 
   async calculateFeeForAddress(
@@ -302,14 +319,20 @@ export class ShipmentService {
     }));
   }
 
-  async createShipment(dto: AdminCreateShipmentDto) {
+  async calculateRatesForOrder(orderId: string, dto: CalculateOrderRatesDto) {
     const order = await this.orderRepository.findOne({
-      where: { id: dto.orderId },
+      where: { id: orderId },
       relations: ['address', 'items'],
     });
 
     if (!order) {
-      throw new NotFoundException(`Order with id ${dto.orderId} not found`);
+      throw new NotFoundException(`Order with id ${orderId} not found`);
+    }
+
+    if (order.status !== 'CONFIRMED') {
+      throw new BadRequestException(
+        `Cannot calculate shipment rates for order with status ${order.status}`,
+      );
     }
 
     if (!order.address) {
@@ -322,6 +345,51 @@ export class ShipmentService {
       order.address.ward,
     );
 
+    const declaredAmount = this.getOrderDeclaredAmount(order);
+    const rates = await this.calculateFeeForAdmin({
+      ...dto,
+      amount: declaredAmount,
+      city: destinationAddress.city,
+      district: destinationAddress.district,
+      ward: destinationAddress.ward,
+    });
+
+    return {
+      orderId: order.id,
+      status: order.status,
+      declaredAmount,
+      destination: destinationAddress,
+      rates,
+    };
+  }
+
+  async createShipment(dto: AdminCreateShipmentDto) {
+    const order = await this.orderRepository.findOne({
+      where: { id: dto.orderId },
+      relations: ['address', 'items'],
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with id ${dto.orderId} not found`);
+    }
+
+    if (order.status !== 'CONFIRMED') {
+      throw new BadRequestException(
+        `Cannot create shipment for order with status ${order.status}`,
+      );
+    }
+
+    if (!order.address) {
+      throw new BadRequestException('Order does not have a shipping address');
+    }
+
+    const destinationAddress = await this.resolveAddressCodes(
+      order.address.province,
+      order.address.district,
+      order.address.ward,
+    );
+
+    const declaredAmount = this.getOrderDeclaredAmount(order);
     const payload = {
       shipment: {
         rate: dto.rateId,
@@ -339,7 +407,7 @@ export class ShipmentService {
         },
         parcel: {
           cod: dto.cod ?? 0,
-          amount: dto.amount ?? Number(order.totalAmount ?? 0),
+          amount: declaredAmount,
           weight: dto.weight ?? 500,
           width: dto.width ?? 10,
           height: dto.height ?? 10,
@@ -402,6 +470,25 @@ export class ShipmentService {
       goshipShipmentId: this.normalizeString(goshipData.id),
       raw: goshipData,
     };
+  }
+
+  async createShipmentForPaidOrder(orderId: string) {
+    throw new BadRequestException(
+      `Order ${orderId} must be shipped manually: confirm the order, calculate rates, then create shipment with the selected rateId`,
+    );
+  }
+
+  private getOrderDeclaredAmount(order: Pick<Order, 'items' | 'totalAmount'>) {
+    const itemsAmount = Math.round(
+      (order.items ?? []).reduce(
+        (sum, item) => sum + Number(item.totalPrice ?? 0),
+        0,
+      ),
+    );
+
+    return itemsAmount > 0
+      ? itemsAmount
+      : Math.round(Number(order.totalAmount ?? 0));
   }
 
   async trackShipment(orderId: string) {
