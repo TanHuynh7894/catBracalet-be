@@ -1,6 +1,7 @@
 ﻿import {
   Column,
   Entity,
+  Index,
   PrimaryGeneratedColumn,
   ManyToOne,
   JoinColumn,
@@ -16,6 +17,7 @@ export function productVariantEntityFactory(): typeof ProductVariant {
 }
 
 @Entity('cart_items')
+@Index(['cartId', 'variantId'], { unique: true })
 export class CartItem {
   @PrimaryGeneratedColumn('uuid', { name: 'cart_item_id' })
   public id: string;

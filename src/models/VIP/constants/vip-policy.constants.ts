@@ -6,8 +6,7 @@ export const VIP_LEVEL_POLICIES = [
     minSpending: 0,
     discountPercent: 5,
     minimumOrderAmount: 99000,
-    benefits:
-      '1 voucher 5% for the next order, birthday flower, birthday gift benefit',
+    benefits: '1 voucher 5% cho don tiep theo, uu dai sinh nhat, qua sinh nhat',
   },
   {
     levelName: 'Bac',
@@ -15,7 +14,7 @@ export const VIP_LEVEL_POLICIES = [
     discountPercent: 8,
     minimumOrderAmount: 149000,
     benefits:
-      '1 voucher 8% for the next order, 15k shipping support once per month, one free bracelet cleaning',
+      '1 voucher 8% cho don tiep theo, mien phi/giam ship 15k moi thang, mien phi thanh tay vong 1 lan',
   },
   {
     levelName: 'Vang',
@@ -23,7 +22,7 @@ export const VIP_LEVEL_POLICIES = [
     discountPercent: 10,
     minimumOrderAmount: 199000,
     benefits:
-      '1 voucher 10%, free shipping, monthly cleansing package twice, priority bracelet consultation',
+      '1 voucher 10%, mien phi van chuyen, goi thanh tay vong 2 lan moi thang, uu tien tu van chon vong',
   },
   {
     levelName: 'Kim Cuong',
@@ -31,6 +30,6 @@ export const VIP_LEVEL_POLICIES = [
     discountPercent: 12,
     minimumOrderAmount: 249000,
     benefits:
-      '2 vouchers 12%, nationwide free shipping, 1-on-1 feng shui consultation, priority new collection access, free gift wrapping',
+      '2 voucher 12%, mien phi ship toan quoc, tu van phong thuy 1-1, uu tien ra mat BST moi, goi boc qua mien phi',
   },
 ] as const;

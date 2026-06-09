@@ -19,6 +19,12 @@ export class OrderItem {
   @Column('uuid', { name: 'variant_id' })
   variantId: string;
 
+  // Snapshot fields are not mapped to DB columns yet. Product name/SKU are
+  // currently returned through item.variant relations.
+  productName?: string;
+
+  sku?: string;
+
   @ManyToOne(() => ProductVariant)
   @JoinColumn({ name: 'variant_id' })
   variant: ProductVariant;

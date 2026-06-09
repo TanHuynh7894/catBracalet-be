@@ -20,6 +20,8 @@ export class CartService {
     private readonly cartItemRepository: Repository<CartItem>,
     @InjectRepository(ProductVariant)
     private readonly productVariantRepository: Repository<ProductVariant>,
+    @InjectRepository(ProductVariantMapping)
+    private readonly productVariantMappingRepository: Repository<ProductVariantMapping>,
   ) {}
 
   private async getOrCreateCartByUserId(userId: string): Promise<Cart> {
@@ -72,17 +74,11 @@ export class CartService {
       const mappings: ProductVariantMapping[] | undefined =
         variant?.productVariantMappings;
 
-      // pick first mapping if exists
-      const mapping: ProductVariantMapping | undefined =
-        mappings && mappings.length > 0 ? mappings[0] : undefined;
+      const mapping = this.getSingleActiveMapping(mappings, item.variantId);
 
       const product: Product | undefined = mapping?.product;
 
-      const basePrice = this.parseDecimal(product?.basePrice);
-      const extraPrice = this.parseDecimal(variant?.extraPrice);
-
-      const unitPriceRaw = basePrice + extraPrice;
-      const unitPrice = this.round2(unitPriceRaw);
+      const unitPrice = this.round2(this.parseDecimal(variant?.extraPrice));
 
       const subTotalRaw = unitPrice * item.quantity;
       const subTotal = this.round2(subTotalRaw);
@@ -140,6 +136,8 @@ export class CartService {
     });
     if (!variant) throw new NotFoundException('Product variant not found');
 
+    await this.findSingleActiveMapping(variantId);
+
     const existingItem = cart.items?.find((it) => it.variantId === variantId);
     const newQuantity = (existingItem?.quantity ?? 0) + quantity;
 
@@ -160,6 +158,49 @@ export class CartService {
       quantity,
     });
     return await this.cartItemRepository.save(newItem);
+  }
+
+  private getSingleActiveMapping(
+    mappings: ProductVariantMapping[] | undefined,
+    variantId: string,
+  ): ProductVariantMapping | undefined {
+    const activeMappings = (mappings ?? []).filter(
+      (mapping) => mapping.status === 'ACTIVE',
+    );
+
+    if (activeMappings.length > 1) {
+      throw new BadRequestException(
+        `Variant ${variantId} is mapped to multiple active products`,
+      );
+    }
+
+    return activeMappings[0];
+  }
+
+  private async findSingleActiveMapping(
+    variantId: string,
+  ): Promise<ProductVariantMapping> {
+    const mappings = await this.productVariantMappingRepository.find({
+      where: {
+        variantId,
+        status: 'ACTIVE',
+      },
+      relations: ['product'],
+    });
+
+    if (!mappings.length) {
+      throw new NotFoundException(
+        'Product variant is not mapped to an active product',
+      );
+    }
+
+    if (mappings.length > 1) {
+      throw new BadRequestException(
+        `Variant ${variantId} is mapped to multiple active products`,
+      );
+    }
+
+    return mappings[0];
   }
 
   async updateCartItem(

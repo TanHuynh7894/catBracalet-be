@@ -9,10 +9,13 @@ import { CartItem } from '../cart_items/entities/cart-item.entity';
 import { ProductVariant } from '../product-variants/entities/product-variant.entity';
 import { Vouchers } from '../vouchers/entities/vouchers.entity';
 import { UserAddress } from '../user_address/entities/user_address.entity';
+import { Payments } from '../payments/entities/payments.entity';
 
 import { VouchersModule } from '../vouchers/vouchers.module';
 import { ShipmentModule } from '../shipment/shipment.module';
 import { VipModule } from '../VIP/vip.module';
+import { PaymentsModule } from '../payments/payments.module';
+import { OrderItemsModule } from '../order-items/order-items.module';
 
 @Module({
   imports: [
@@ -24,10 +27,13 @@ import { VipModule } from '../VIP/vip.module';
       ProductVariant,
       Vouchers,
       UserAddress,
+      Payments,
     ]),
     VouchersModule,
     ShipmentModule,
     VipModule,
+    PaymentsModule,
+    OrderItemsModule,
   ],
   controllers: [OrdersController],
 

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -14,6 +15,8 @@ import { Order } from '../orders/entities/order.entity';
 import { Payments } from './entities/payments.entity';
 
 const MAX_GENERATE_ATTEMPTS = 20;
+const MIN_ORDER_CODE = 100_000_000;
+const MAX_INTEGER_ORDER_CODE = 2_147_483_647;
 
 export interface PayOSPaymentLinkInfo {
   orderCode: number;
@@ -62,7 +65,7 @@ export class PaymentsService {
       throw new NotFoundException(`Order with id ${orderId} not found`);
     }
 
-    const amount = Number(order.totalAmount);
+    const amount = Math.round(Number(order.totalAmount));
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new NotFoundException(
         `Order total amount is invalid for ${orderId}`,
@@ -99,9 +102,37 @@ export class PaymentsService {
       orderId,
       orderCode,
       amount,
+      paymentAmountSource: 'orders.totalAmount',
       checkoutUrl: paymentLink.checkoutUrl,
       paymentLinkId: paymentLink.paymentLinkId,
     };
+  }
+
+  async retryPayment(orderId: string) {
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId },
+      select: { id: true, status: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with id ${orderId} not found`);
+    }
+
+    if (order.status === 'CANCELLED' || order.status === 'DELIVERED') {
+      throw new BadRequestException(
+        `Cannot retry payment for order with status ${order.status}`,
+      );
+    }
+
+    const paidPayment = await this.paymentsRepository.findOne({
+      where: { orderId, paymentStatus: 'PAID' },
+    });
+
+    if (paidPayment) {
+      throw new BadRequestException('Order has already been paid');
+    }
+
+    return this.createOSPayment(orderId);
   }
 
   verifyPaymentWebhookWithSDK(body: Record<string, unknown>): {
@@ -187,10 +218,10 @@ export class PaymentsService {
       return { success: false, message: 'Order record not found' };
     }
 
-    if (order.status === 'CONFIRMED') {
+    if (order.status !== 'PENDING') {
       return {
         success: true,
-        message: 'Duplicate webhook ignored',
+        message: `Payment webhook ignored because order is already ${order.status}`,
       };
     }
 
@@ -203,19 +234,14 @@ export class PaymentsService {
       await this.paymentsRepository.save(payment);
     }
 
-    try {
-      await this.orderRepository.update(
-        { id: payment.orderId },
-        { status: 'CONFIRMED' },
-      );
-
-      return { success: true };
-    } catch {
-      throw new HttpException(
-        'Failed to update order record',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
+    return {
+      success: true,
+      message:
+        'Payment marked as paid. Order is still pending staff confirmation.',
+      orderId: payment.orderId,
+      orderStatus: order.status,
+      paymentStatus: payment.paymentStatus,
+    };
   }
 
   private async getPaymentLinkInfoSafe(
@@ -311,7 +337,11 @@ export class PaymentsService {
 
   private async generateUniqueOrderCode(): Promise<number> {
     for (let attempt = 0; attempt < MAX_GENERATE_ATTEMPTS; attempt += 1) {
-      const orderCode = Date.now() + Math.floor(Math.random() * 1000);
+      const orderCode =
+        MIN_ORDER_CODE +
+        Math.floor(
+          Math.random() * (MAX_INTEGER_ORDER_CODE - MIN_ORDER_CODE + 1),
+        );
 
       const existing = await this.paymentsRepository.findOne({
         where: { orderCode },
