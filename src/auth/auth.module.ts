@@ -16,7 +16,7 @@ import { UserModule } from '../models/user/user.module';
       useFactory: (configService: ConfigService): JwtModuleOptions => ({
         secret: configService.get<string>('JWT_SECRET') ?? 'DEFAULT_SECRET',
         signOptions: {
-          expiresIn: '15m',
+          expiresIn: '60m',
         },
       }),
     }),

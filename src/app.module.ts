@@ -22,6 +22,8 @@ import { OrdersModule } from './models/orders/orders.module';
 import { ProductMaterialsModule } from './models/product-materials/product-materials.module';
 import { ConsultationRegistrationsModule } from './models/consultation-registrations/consultation-registrations.module';
 import { ShipmentModule } from './models/shipment/shipment.module';
+import { TicketMessagesModule } from './models/ticket-messages/ticket-messages.module';
+import { SupportTicketsModule } from './models/support-tickets/support-tickets.module';
 
 @Module({
   imports: [
@@ -80,6 +82,8 @@ import { ShipmentModule } from './models/shipment/shipment.module';
     ProductMaterialsModule,
     ConsultationRegistrationsModule,
     ShipmentModule,
+    TicketMessagesModule,
+    SupportTicketsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
