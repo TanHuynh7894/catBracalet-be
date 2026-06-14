@@ -19,21 +19,26 @@ export class CreateUserAddressDto {
   phone: string;
 
   @ApiProperty({
-    example: 'TP. Ho Chi Minh',
-    description: 'The province or city',
+    example: '700000',
+    description:
+      'Goship province/city id from GET /user-address/provinces',
   })
   @IsString()
   @MaxLength(100)
   province: string;
 
-  @ApiProperty({ example: 'Quan 1', description: 'The district' })
+  @ApiProperty({
+    example: '701000',
+    description:
+      'Goship district id from GET /user-address/districts/:provinceId',
+  })
   @IsString()
   @MaxLength(100)
   district: string;
 
   @ApiProperty({
-    example: 'Phuong Ben Nghe',
-    description: 'The ward or commune',
+    example: '701011',
+    description: 'Goship ward id from GET /user-address/wards/:districtId',
   })
   @IsString()
   @MaxLength(100)
