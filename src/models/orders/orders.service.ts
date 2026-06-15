@@ -16,7 +16,10 @@ import { UserAddress } from '../user_address/entities/user_address.entity';
 import { VouchersService } from '../vouchers/vouchers.service';
 import { ShipmentService } from '../shipment/shipment.service';
 import { VipService } from '../VIP/vip.service';
-import { PaymentsService } from '../payments/payments.service';
+import {
+  PaymentRedirectOptions,
+  PaymentsService,
+} from '../payments/payments.service';
 import { Payments } from '../payments/entities/payments.entity';
 import { OrderItemsService } from '../order-items/order-items.service';
 import {
@@ -49,6 +52,7 @@ export class OrdersService {
     addressId: string,
     voucherCode?: string,
     cartItemIds?: string[],
+    paymentRedirectOptions: PaymentRedirectOptions = {},
   ) {
     const checkoutResult = await this.dataSource.transaction(
       async (manager: EntityManager) => {
@@ -135,12 +139,16 @@ export class OrdersService {
 
     const payment = await this.paymentsService.createOSPayment(
       checkoutResult.order.id,
+      paymentRedirectOptions,
     );
 
     return {
       order: checkoutResult.order,
       pricing: checkoutResult.pricing,
       payment,
+      checkoutUrl: payment.checkoutUrl,
+      orderCode: payment.orderCode,
+      paymentLinkId: payment.paymentLinkId,
     };
   }
 

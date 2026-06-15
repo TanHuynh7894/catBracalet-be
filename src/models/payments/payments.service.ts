@@ -26,6 +26,11 @@ export interface PayOSPaymentLinkInfo {
   amountRemaining: number;
 }
 
+export interface PaymentRedirectOptions {
+  returnUrl?: string;
+  cancelUrl?: string;
+}
+
 @Injectable()
 export class PaymentsService {
   private readonly payOS: PayOS;
@@ -63,11 +68,25 @@ export class PaymentsService {
   private getPaymentRedirectUrl(
     configKey: 'PAYOS_RETURN_URL' | 'PAYOS_CANCEL_URL',
     fallbackPath: string,
+    query: Record<string, string | number>,
+    overrideUrl?: string,
   ): string {
-    const configuredUrl = this.configService.get<string>(configKey)?.trim();
+    const configuredUrl =
+      overrideUrl?.trim() || this.configService.get<string>(configKey)?.trim();
 
-    if (configuredUrl) {
-      return configuredUrl;
+    const redirectUrl =
+      configuredUrl ||
+      this.getPaymentRedirectBaseUrl(configKey, fallbackPath);
+
+    return this.appendQueryParams(redirectUrl, query);
+  }
+
+  private getPaymentRedirectBaseUrl(
+    configKey: 'PAYOS_RETURN_URL' | 'PAYOS_CANCEL_URL',
+    fallbackPath: string,
+  ): string {
+    if (fallbackPath.includes('://')) {
+      return fallbackPath;
     }
 
     const redirectBaseUrl =
@@ -77,14 +96,32 @@ export class PaymentsService {
 
     if (!redirectBaseUrl) {
       throw new InternalServerErrorException(
-        'Missing payment redirect URL configuration',
+        `Missing payment redirect URL configuration for ${configKey}`,
       );
     }
 
     return `${this.normalizeUrl(redirectBaseUrl)}${fallbackPath}`;
   }
 
-  async createOSPayment(orderId: string) {
+  private appendQueryParams(
+    url: string,
+    query: Record<string, string | number>,
+  ): string {
+    const separator = url.includes('?') ? '&' : '?';
+    const params = Object.entries(query)
+      .map(
+        ([key, value]) =>
+          `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`,
+      )
+      .join('&');
+
+    return `${url}${separator}${params}`;
+  }
+
+  async createOSPayment(
+    orderId: string,
+    redirectOptions: PaymentRedirectOptions = {},
+  ) {
     const order = await this.orderRepository.findOne({
       where: { id: orderId },
     });
@@ -117,10 +154,14 @@ export class PaymentsService {
     const returnUrl = this.getPaymentRedirectUrl(
       'PAYOS_RETURN_URL',
       '/successfulpayment',
+      { status: 'success', orderId, orderCode },
+      redirectOptions.returnUrl,
     );
     const cancelUrl = this.getPaymentRedirectUrl(
       'PAYOS_CANCEL_URL',
       '/payment/cancel',
+      { status: 'cancel', orderId, orderCode },
+      redirectOptions.cancelUrl,
     );
 
     const paymentLink = await this.payOS.paymentRequests.create({

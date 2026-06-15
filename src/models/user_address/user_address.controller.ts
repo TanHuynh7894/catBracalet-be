@@ -11,11 +11,35 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { UserAddressService } from './user_address.service';
 import { CreateUserAddressDto } from './dto/create-user-address.dto';
 import { UpdateUserAddressDto } from './dto/update-user-address.dto';
+import { ShipmentService } from '../shipment/shipment.service';
 
 @ApiTags('User Address')
 @Controller('user-address')
 export class UserAddressController {
-  constructor(private readonly userAddressService: UserAddressService) {}
+  constructor(
+    private readonly userAddressService: UserAddressService,
+    private readonly shipmentService: ShipmentService,
+  ) {}
+
+  @Get('provinces')
+  @ApiOperation({ summary: 'Get Goship provinces/cities for user address' })
+  getAllProvinces() {
+    return this.shipmentService.getProvinces();
+  }
+
+  @Get('districts/:provinceId')
+  @ApiOperation({
+    summary: 'Get Goship districts by province/city id for user address',
+  })
+  getDistrictsByProvince(@Param('provinceId') provinceId: string) {
+    return this.shipmentService.getDistricts(provinceId);
+  }
+
+  @Get('wards/:districtId')
+  @ApiOperation({ summary: 'Get Goship wards by district id for user address' })
+  getWardsByDistrict(@Param('districtId') districtId: string) {
+    return this.shipmentService.getWards(districtId);
+  }
 
   @Post(':userId')
   @ApiOperation({ summary: 'Create a new address for a user' })
