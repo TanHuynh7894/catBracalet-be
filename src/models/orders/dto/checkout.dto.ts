@@ -25,4 +25,20 @@ export class CheckoutDto {
   @IsArray()
   @IsUUID('4', { each: true })
   cartItemIds?: string[];
+
+  @ApiProperty({
+    description: 'URL quay lai sau khi thanh toan thanh cong',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  paymentReturnUrl?: string;
+
+  @ApiProperty({
+    description: 'URL quay lai sau khi huy thanh toan',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  paymentCancelUrl?: string;
 }

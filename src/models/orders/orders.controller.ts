@@ -33,12 +33,20 @@ export class OrdersController {
   @Post('checkout')
   @ApiOperation({ summary: 'Xử lý thanh toán đơn hàng (User)' })
   handleCheckout(@Body() checkoutDto: CheckoutDto) {
-    const { userId, addressId, voucherCode, cartItemIds } = checkoutDto;
+    const {
+      userId,
+      addressId,
+      voucherCode,
+      cartItemIds,
+      paymentReturnUrl,
+      paymentCancelUrl,
+    } = checkoutDto;
     return this.ordersService.handleCheckout(
       userId,
       addressId,
       voucherCode,
       cartItemIds,
+      { returnUrl: paymentReturnUrl, cancelUrl: paymentCancelUrl },
     );
   }
 
