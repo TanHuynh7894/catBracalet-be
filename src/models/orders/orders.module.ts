@@ -10,12 +10,12 @@ import { ProductVariant } from '../product-variants/entities/product-variant.ent
 import { Vouchers } from '../vouchers/entities/vouchers.entity';
 import { UserAddress } from '../user_address/entities/user_address.entity';
 import { Payments } from '../payments/entities/payments.entity';
-
 import { VouchersModule } from '../vouchers/vouchers.module';
 import { ShipmentModule } from '../shipment/shipment.module';
 import { VipModule } from '../VIP/vip.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { OrderItemsModule } from '../order-items/order-items.module';
+import { NotificationsModule } from '../../notifications/notifications.module'; 
 
 @Module({
   imports: [
@@ -34,9 +34,9 @@ import { OrderItemsModule } from '../order-items/order-items.module';
     VipModule,
     PaymentsModule,
     OrderItemsModule,
+    NotificationsModule, 
   ],
   controllers: [OrdersController],
-
   providers: [OrdersService],
   exports: [OrdersService],
 })

@@ -26,6 +26,8 @@ import {
   ORDER_STATUSES,
   OrderStatus,
 } from './constants/order-status.constants';
+import { NotificationsService } from '../../notifications/notifications.service';
+import { NotificationsGateway } from '../../notifications/notifications.gateway';
 
 @Injectable()
 export class OrdersService {
@@ -42,6 +44,8 @@ export class OrdersService {
     private readonly paymentsService: PaymentsService,
     private readonly orderItemsService: OrderItemsService,
     private readonly dataSource: DataSource,
+    private readonly notificationsService: NotificationsService,
+    private readonly notificationsGateway: NotificationsGateway,
   ) {}
 
   /**
@@ -141,6 +145,21 @@ export class OrdersService {
       checkoutResult.order.id,
       paymentRedirectOptions,
     );
+
+    try {
+      const newNotif = await this.notificationsService.createNotification({
+        title: 'Đơn hàng mới! 📦',
+        message: `Khách hàng vừa đặt đơn #${checkoutResult.order.id} (Chờ thanh toán)`,
+        type: 'ORDER',
+        relatedId: checkoutResult.order.id.toString(),
+      });
+
+      this.notificationsGateway.sendNotificationToAll(newNotif);
+      console.log(`[DEBUG] Đã bắn thông báo cho đơn hàng ${checkoutResult.order.id}`);
+    } catch (error) {
+      // Bọc try-catch cẩn thận, lỡ thông báo lỗi thì khách vẫn nhận được link thanh toán
+      console.error('[ERROR] Lỗi nổ thông báo checkout:', error);
+    }
 
     return {
       order: checkoutResult.order,
@@ -270,12 +289,6 @@ export class OrdersService {
     }
   }
 
-  /**
-   * Helper: Trigger cập nhật hạng thành viên VIP (Mở rộng sau)
-   */
-  /**
-   * Validate cart, stock, variants, voucher, and address
-   */
   private async validateCheckout(
     manager: EntityManager,
     userId: string,
