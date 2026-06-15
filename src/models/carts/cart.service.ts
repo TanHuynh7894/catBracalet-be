@@ -3,6 +3,7 @@
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindOptionsWhere } from 'typeorm';
 import { Cart } from './entities/cart.entity';
@@ -22,6 +23,7 @@ export class CartService {
     private readonly productVariantRepository: Repository<ProductVariant>,
     @InjectRepository(ProductVariantMapping)
     private readonly productVariantMappingRepository: Repository<ProductVariantMapping>,
+    private readonly configService: ConfigService,
   ) {}
 
   private async getOrCreateCartByUserId(userId: string): Promise<Cart> {
@@ -56,6 +58,20 @@ export class CartService {
   // Round to 2 decimal places (money)
   private round2(value: number): number {
     return Math.round(value * 100) / 100;
+  }
+
+  private formatThumbnailUrl(thumbnail?: string | null): string | null {
+    if (!thumbnail) return null;
+    if (/^https?:\/\//i.test(thumbnail)) return thumbnail;
+
+    const baseUrl =
+      this.configService.get<string>('url_base_BE') || 'http://localhost:3000';
+    const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+    const cleanThumbnail = thumbnail.startsWith('/')
+      ? thumbnail
+      : `/${thumbnail}`;
+
+    return `${cleanBaseUrl}${cleanThumbnail}`;
   }
 
   async getCartDetails(userId: string) {
@@ -105,6 +121,7 @@ export class CartService {
               id: product.id,
               productName: product.productName,
               basePrice: this.parseDecimal(product.basePrice),
+              thumbnail: this.formatThumbnailUrl(product.thumbnail),
             }
           : null,
       };
