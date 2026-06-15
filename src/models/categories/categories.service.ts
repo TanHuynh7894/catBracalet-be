@@ -65,19 +65,31 @@ export class CategoriesService {
     return await this.categoryRepository.save(category);
   }
 
-  // Soft delete
-  async softDelete(id: string): Promise<Category> {
-    const category = await this.findOne(id);
+  // // Soft delete
+  // async softDelete(id: string): Promise<Category> {
+  //   const category = await this.findOne(id);
 
-    category.status = CategoryStatus.INACTIVE;
+  //   category.status = CategoryStatus.INACTIVE;
 
-    return await this.categoryRepository.save(category);
-  }
+  //   return await this.categoryRepository.save(category);
+  // }
 
   // Force delete
   async remove(id: string): Promise<void> {
     const category = await this.findOne(id);
 
     await this.categoryRepository.remove(category);
+  }
+
+  // Toggle status (Thay thế cho softDelete cũ)
+  async softDelete(id: string): Promise<Category> {
+    const category = await this.findOne(id);
+
+    // Nếu đang ACTIVE thì chuyển thành INACTIVE, ngược lại thì thành ACTIVE
+    category.status = category.status === CategoryStatus.ACTIVE 
+      ? CategoryStatus.INACTIVE 
+      : CategoryStatus.ACTIVE;
+
+    return await this.categoryRepository.save(category);
   }
 }

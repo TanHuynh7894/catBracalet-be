@@ -24,7 +24,7 @@ export class ProductVariantMappingsService {
     private readonly productRepository: Repository<Product>,
     @InjectRepository(ProductVariant)
     private readonly productVariantRepository: Repository<ProductVariant>,
-  ) {}
+  ) { }
 
   async create(
     createMappingDto: CreateProductVariantMappingDto,
@@ -60,7 +60,10 @@ export class ProductVariantMappingsService {
       relations: {
         product: {
           category: true,
-          material: true,
+          // 🟢 ĐÃ SỬA: Đi qua bảng trung gian product_materials để lấy thông tin material
+          product_materials: {
+            material: true,
+          },
         },
         variant: true,
       },
@@ -76,7 +79,10 @@ export class ProductVariantMappingsService {
       relations: {
         product: {
           category: true,
-          material: true,
+          // 🟢 ĐÃ SỬA: Đi qua bảng trung gian product_materials để lấy thông tin material
+          product_materials: {
+            material: true,
+          },
         },
         variant: true,
       },
@@ -91,16 +97,35 @@ export class ProductVariantMappingsService {
     return mapping;
   }
 
+  // async softDelete(
+  //   productId: string,
+  //   variantId: string,
+  // ): Promise<ProductVariantMapping> {
+  //   const mapping = await this.findOne(productId, variantId);
+
+  //   mapping.status = ProductVariantMappingStatus.INACTIVE;
+
+  //   await this.mappingRepository.save(mapping);
+
+  //   return await this.findOne(productId, variantId);
+  // }
+
   async softDelete(
     productId: string,
     variantId: string,
   ): Promise<ProductVariantMapping> {
+    // 1. Tìm mapping hiện tại theo cặp Id
     const mapping = await this.findOne(productId, variantId);
 
-    mapping.status = ProductVariantMappingStatus.INACTIVE;
+    // 2. Kiểm tra trạng thái để toggle giữa ACTIVE và INACTIVE
+    mapping.status = mapping.status === ProductVariantMappingStatus.INACTIVE
+      ? ProductVariantMappingStatus.ACTIVE
+      : ProductVariantMappingStatus.INACTIVE;
 
+    // 3. Lưu thay đổi
     await this.mappingRepository.save(mapping);
 
+    // 4. Trả về data mới nhất
     return await this.findOne(productId, variantId);
   }
 

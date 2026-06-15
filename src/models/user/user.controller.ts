@@ -7,12 +7,22 @@
   Param,
   Delete,
   UseGuards,
+  UploadedFile,
+  UseInterceptors,
+  ParseUUIDPipe,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { RolesGuard } from '../../auth/guards/roles.guard';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiConsumes,
+  ApiBody,
+  ApiParam,
 } from '@nestjs/swagger';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -32,6 +42,14 @@ import { LogoutDto } from './dto/logout.dto';
 import { AddUserRoleDto } from './dto/add-user-role.dto';
 import { RemoveUserRoleDto } from './dto/remove-user-role.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+// (Bạn có thể bỏ file upload-avatar.dto.ts nếu không còn dùng tới fields nào khác ngoài file ảnh)
+import { UploadAvatarDto } from './dto/upload-avatar.dto';
+
+import {
+  getImageUploadOptions,
+  buildImagePublicUrl,
+  UploadImageType,
+} from '../../helpers/upload-image.helper';
 
 @ApiTags('User')
 @Controller('user')
@@ -114,12 +132,60 @@ export class UserController {
     return this.userService.resetPassword(resetPasswordDto);
   }
 
+  /**
+   * 🟢 API UPLOAD AVATAR CHO USER
+   */
+  @Patch(':id/avatar')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Upload or update avatar for user',
+    description:
+      'Nhận tệp ảnh nhị phân và tự động lưu vào thư mục images/avatar',
+  })
+  @ApiParam({ name: 'id', description: 'User UUID' })
+  @ApiBody({ type: UploadAvatarDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Avatar updated successfully',
+    type: User,
+  })
+  // 💡 Gắn cứng UploadImageType.AVATAR vào ngay đây
+  @UseInterceptors(
+    FileInterceptor('avatar', getImageUploadOptions(UploadImageType.AVATAR)),
+  )
+  async uploadAvatar(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Vui lòng cung cấp file ảnh');
+    }
+
+    // file.path từ Multer sẽ có định dạng thô dạng "uploads/avatar/abc.jpg"
+    // Hàm buildImagePublicUrl sẽ chuyển đổi nó thành dạng chuẩn lưu trữ "/images/avatar/abc.jpg"
+    const avatarPath = buildImagePublicUrl(file.path);
+
+    return this.userService.updateAvatar(id, avatarPath);
+  }
+
   @Post()
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Create a new user (Admin)',
     description: 'Directly create a user in the database',
   })
-  create(@Body() createUserDto: CreateUserDto) {
+  @UseInterceptors(
+    FileInterceptor('avatar', getImageUploadOptions(UploadImageType.AVATAR)),
+  )
+  async create(
+    @Body() createUserDto: CreateUserDto,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (file) {
+      createUserDto.avatar = buildImagePublicUrl(file.path);
+    }
     return this.userService.create(createUserDto);
   }
 
@@ -139,18 +205,29 @@ export class UserController {
     summary: 'Get user profile',
     description: 'Retrieve profile details for a specific user',
   })
-  getProfile(@Param('id') id: string) {
+  getProfile(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
     return this.userService.getProfile(id);
   }
 
   @Patch('profile/:id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Update user profile',
     description: 'Update basic profile information for a user',
   })
-  updateProfile(@Param('id') id: string, @Body() updateDto: UpdateUserDto) {
+  @UseInterceptors(
+    FileInterceptor('avatar', getImageUploadOptions(UploadImageType.AVATAR)),
+  )
+  updateProfile(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() updateDto: UpdateUserDto,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (file) {
+      updateDto.avatar = buildImagePublicUrl(file.path);
+    }
     return this.userService.updateProfile(id, updateDto);
   }
 
@@ -162,7 +239,7 @@ export class UserController {
     description: 'Update user password after verifying the old one',
   })
   changePassword(
-    @Param('id') id: string,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() changePasswordDto: ChangePasswordDto,
   ) {
     return this.userService.changePassword(id, changePasswordDto);
@@ -173,16 +250,27 @@ export class UserController {
     summary: 'Get user by ID',
     description: 'Retrieve details for a specific user by their unique ID',
   })
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
     return this.userService.findOne(id);
   }
 
   @Patch(':id')
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Update user (Admin)',
     description: 'Update any user field by ID',
   })
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+  @UseInterceptors(
+    FileInterceptor('avatar', getImageUploadOptions(UploadImageType.AVATAR)),
+  )
+  update(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() updateUserDto: UpdateUserDto,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (file) {
+      updateUserDto.avatar = buildImagePublicUrl(file.path);
+    }
     return this.userService.update(id, updateUserDto);
   }
 
@@ -191,7 +279,10 @@ export class UserController {
     summary: 'Add role to user',
     description: 'Assign a specific role to a user',
   })
-  addRole(@Param('id') userId: string, @Body() addUserRoleDto: AddUserRoleDto) {
+  addRole(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) userId: string,
+    @Body() addUserRoleDto: AddUserRoleDto,
+  ) {
     return this.userService.addRoleToUser(userId, addUserRoleDto.roleId);
   }
 
@@ -201,7 +292,7 @@ export class UserController {
     description: 'Remove a specific role from a user',
   })
   removeRole(
-    @Param('id') userId: string,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) userId: string,
     @Body() removeUserRoleDto: RemoveUserRoleDto,
   ) {
     return this.userService.removeRoleFromUser(
@@ -210,12 +301,24 @@ export class UserController {
     );
   }
 
+  @Delete(':id/soft-delete')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Soft delete user (Admin)',
+    description: 'Change user status to DELETED or other status',
+  })
+  softDelete(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
+    return this.userService.softDelete(id);
+  }
+
   @Delete(':id')
   @ApiOperation({
     summary: 'Delete user (Admin)',
     description: 'Remove a user from the system',
   })
-  remove(@Param('id') id: string) {
+  remove(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
     return this.userService.remove(id);
   }
 }

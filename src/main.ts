@@ -5,9 +5,12 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { Request, Response } from 'express';
 import { join } from 'path';
+import { TypeOrmExceptionFilter } from './helpers/typeorm-exception.filter';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -15,6 +18,8 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
+
+  app.useGlobalFilters(new TypeOrmExceptionFilter());
 
   app.useStaticAssets(join(process.cwd(), 'images'), {
     prefix: '/images',
@@ -24,7 +29,6 @@ async function bootstrap() {
     .setTitle('Cat Bracelet API')
     .setDescription('The Cat Bracelet API description')
     .setVersion('1.0')
-    // 🌟 THÊM ĐÚNG KHỐI NÀY ĐỂ KÍCH HOẠT NÚT AUTHORIZE TRÊN SWAGGER
     .addBearerAuth(
       {
         type: 'http',
@@ -35,12 +39,18 @@ async function bootstrap() {
           'Dán cục Access Token (Bearer) của ông vào đây để xác thực',
         in: 'header',
       },
-      'JWT-auth', // Cái tên key định danh (Bắt buộc phải trùng với bên Controller)
+      'JWT-auth',
     )
     .build();
 
   const documentFactory = () => SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, documentFactory);
+
+  app.enableCors({
+    origin: '*',
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+  });
 
   app
     .getHttpAdapter()
@@ -56,6 +66,6 @@ async function bootstrap() {
       return res.redirect(docsPath);
     });
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
 }
 bootstrap();

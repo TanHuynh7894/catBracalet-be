@@ -18,6 +18,10 @@ import { PaymentsModule } from './models/payments/payments.module';
 import { VipModule } from './models/VIP/vip.module';
 import { AuthModule } from './auth/auth.module';
 import { CartModule } from './models/carts/cart.module';
+import { OrdersModule } from './models/orders/orders.module';
+import { ProductMaterialsModule } from './models/product-materials/product-materials.module';
+import { ConsultationRegistrationsModule } from './models/consultation-registrations/consultation-registrations.module';
+import { ShipmentModule } from './models/shipment/shipment.module';
 
 @Module({
   imports: [
@@ -72,6 +76,10 @@ import { CartModule } from './models/carts/cart.module';
     PaymentsModule,
     VipModule,
     CartModule,
+    OrdersModule,
+    ProductMaterialsModule,
+    ConsultationRegistrationsModule,
+    ShipmentModule,
   ],
   controllers: [AppController],
   providers: [AppService],

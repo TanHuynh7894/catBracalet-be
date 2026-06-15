@@ -8,9 +8,9 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Category } from '../../categories/entities/category.entity';
-import { Material } from '../../materials/entities/material.entity';
 import { ProductImage } from '../../product-images/entities/product-image.entity';
 import { ProductVariantMapping } from '../../product-variant-mappings/entities/product-variant-mapping.entity';
+import { ProductMaterial } from '../../product-materials/entities/product-material.entity'; // Đã thêm import này
 
 @Entity('products')
 @Check(`status IN ('ACTIVE', 'INACTIVE')`)
@@ -21,16 +21,9 @@ export class Product {
   @Column({ type: 'uuid', name: 'category_id', nullable: true })
   categoryId?: string;
 
-  @Column({ type: 'uuid', name: 'material_id', nullable: true })
-  materialId?: string;
-
   @ManyToOne(() => Category, { nullable: true })
   @JoinColumn({ name: 'category_id', referencedColumnName: 'id' })
   category?: Category;
-
-  @ManyToOne(() => Material, { nullable: true })
-  @JoinColumn({ name: 'material_id', referencedColumnName: 'id' })
-  material?: Material;
 
   @OneToMany(() => ProductImage, (productImage) => productImage.product)
   productImages?: ProductImage[];
@@ -40,6 +33,12 @@ export class Product {
     (productVariantMapping) => productVariantMapping.product,
   )
   productVariantMappings?: ProductVariantMapping[];
+
+  @OneToMany(
+    () => ProductMaterial,
+    (productMaterial) => productMaterial.product,
+  )
+  product_materials: ProductMaterial[];
 
   @Column({ length: 255, name: 'product_name' })
   productName: string;
