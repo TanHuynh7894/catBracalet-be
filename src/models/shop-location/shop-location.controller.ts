@@ -26,18 +26,49 @@ export class ShopLocationController {
 
   @Post()
   @ApiOperation({
-    summary: 'Save shop location latitude and longitude for Google Maps',
+    summary: 'Create a shop location from selected Goship address codes',
   })
   @ApiCreatedResponse({ type: ShopLocation })
   create(@Body() createShopLocationDto: CreateShopLocationDto) {
     return this.shopLocationService.create(createShopLocationDto);
   }
 
+  @Get('provinces')
+  @ApiOperation({ summary: 'Get Goship provinces/cities for shop location' })
+  getAllProvinces() {
+    return this.shopLocationService.getProvinces();
+  }
+
+  @Get('districts/:provinceId')
+  @ApiOperation({
+    summary: 'Get Goship districts by province/city id for shop location',
+  })
+  getDistrictsByProvince(@Param('provinceId') provinceId: string) {
+    return this.shopLocationService.getDistricts(provinceId);
+  }
+
+  @Get('wards/:districtId')
+  @ApiOperation({
+    summary: 'Get Goship wards by district id for shop location',
+  })
+  getWardsByDistrict(@Param('districtId') districtId: string) {
+    return this.shopLocationService.getWards(districtId);
+  }
+
   @Get()
-  @ApiOperation({ summary: 'Get current active shop location for FE map' })
+  @ApiOperation({
+    summary: 'Get latest active shop location for legacy FE map',
+  })
   @ApiOkResponse({ type: ShopLocation })
   findCurrent() {
     return this.shopLocationService.findCurrent();
+  }
+
+  @Get('active')
+  @ApiOperation({ summary: 'Get active shop locations for FE map/shipping' })
+  @ApiOkResponse({ type: ShopLocation, isArray: true })
+  findActive() {
+    return this.shopLocationService.findActive();
   }
 
   @Get('all')

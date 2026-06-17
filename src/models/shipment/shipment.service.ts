@@ -16,6 +16,7 @@ import { Order } from '../orders/entities/order.entity';
 import { UserAddress } from '../user_address/entities/user_address.entity';
 import { VipService } from '../VIP/vip.service';
 import { Shipment } from './entities/shipment.entity';
+import { ShopLocation } from '../shop-location/entities/shop-location.entity';
 import { AdminCreateShipmentDto } from './dto/admin-create-shipment.dto';
 import { CalculateAddressFeeDto } from './dto/calculate-address-fee.dto';
 import { CalculateFeeDto } from './dto/calculate-fee.dto';
@@ -73,6 +74,15 @@ export interface NormalizedGoshipRate {
   total_amount: number;
 }
 
+export interface ResolvedAddressDetails {
+  city: string;
+  cityName: string;
+  district: string;
+  districtName: string;
+  ward: string;
+  wardName: string;
+}
+
 @Injectable()
 export class ShipmentService {
   private provinces: GoshipProvince[] = [];
@@ -86,6 +96,8 @@ export class ShipmentService {
     private readonly orderRepository: Repository<Order>,
     @InjectRepository(UserAddress)
     private readonly userAddressRepository: Repository<UserAddress>,
+    @InjectRepository(ShopLocation)
+    private readonly shopLocationRepository: Repository<ShopLocation>,
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
     private readonly vipService: VipService,
@@ -239,8 +251,8 @@ export class ShipmentService {
     return this.wards.filter((ward) => ward.district_id === code);
   }
 
-  async calculateFeeForClient(dto: CalculateFeeDto) {
-    const adminRates = await this.calculateFeeForAdmin(dto);
+  async calculateFeeForClient(dto: CalculateFeeDto, shopLocationId?: string) {
+    const adminRates = await this.calculateFeeForAdmin(dto, shopLocationId);
 
     if (!adminRates.length) {
       throw new BadRequestException(
@@ -276,36 +288,38 @@ export class ShipmentService {
       );
     }
 
-    return this.calculateFeeForAddress(address);
+    return this.calculateFeeForAddress(address, {}, dto.shopLocationId);
   }
 
   async calculateFeeForAddress(
     address: Pick<UserAddress, 'province' | 'district' | 'ward'>,
     parcel: Omit<CalculateFeeDto, 'city' | 'district' | 'ward'> = {},
+    shopLocationId?: string,
   ) {
-    const destinationAddress = await this.resolveAddressCodes(
+    const destinationAddress = await this.resolveAddressDetails(
       address.province,
       address.district,
       address.ward,
     );
 
-    return this.calculateFeeForClient({
-      ...parcel,
-      city: destinationAddress.city,
-      district: destinationAddress.district,
-      ward: destinationAddress.ward,
-    });
+    return this.calculateFeeForClient(
+      {
+        ...parcel,
+        city: destinationAddress.city,
+        district: destinationAddress.district,
+        ward: destinationAddress.ward,
+      },
+      shopLocationId,
+    );
   }
 
-  async calculateFeeForAdmin(dto: CalculateFeeDto) {
+  async calculateFeeForAdmin(dto: CalculateFeeDto, shopLocationId?: string) {
     await this.validateDestinationCodes(dto.city, dto.district, dto.ward);
+    const senderAddress = await this.getSenderRateAddress(shopLocationId);
 
     const payload = {
       shipment: {
-        address_from: {
-          city: this.getSenderCity(),
-          district: this.getSenderDistrict(),
-        },
+        address_from: senderAddress,
         address_to: {
           city: dto.city,
           district: dto.district,
@@ -324,19 +338,21 @@ export class ShipmentService {
     const response = await this.postToGoship('/rates', payload);
     const rates = this.extractGoshipData<GoshipRateResponse[]>(response, []);
 
-    return rates.map((rate): NormalizedGoshipRate => ({
-      id: rate.id,
-      carrier_name: rate.carrier_name,
-      carrier_code: rate.carrier_code ?? null,
-      carrier_short_name: rate.carrier_short_name ?? null,
-      carrier_logo: rate.carrier_logo,
-      service: rate.service_name ?? rate.service ?? null,
-      service_code: rate.service_code ?? null,
-      expected: rate.expected_txt ?? rate.expected ?? null,
-      cod_fee: Number(rate.cod_fee ?? 0),
-      total_fee: Number(rate.total_fee ?? 0),
-      total_amount: Number(rate.total_amount ?? rate.total_fee ?? 0),
-    }));
+    return rates.map(
+      (rate): NormalizedGoshipRate => ({
+        id: rate.id,
+        carrier_name: rate.carrier_name,
+        carrier_code: rate.carrier_code ?? null,
+        carrier_short_name: rate.carrier_short_name ?? null,
+        carrier_logo: rate.carrier_logo,
+        service: rate.service_name ?? rate.service ?? null,
+        service_code: rate.service_code ?? null,
+        expected: rate.expected_txt ?? rate.expected ?? null,
+        cod_fee: Number(rate.cod_fee ?? 0),
+        total_fee: Number(rate.total_fee ?? 0),
+        total_amount: Number(rate.total_amount ?? rate.total_fee ?? 0),
+      }),
+    );
   }
 
   async calculateRatesForOrder(orderId: string, dto: CalculateOrderRatesDto) {
@@ -359,26 +375,34 @@ export class ShipmentService {
       throw new BadRequestException('Order does not have a shipping address');
     }
 
-    const destinationAddress = await this.resolveAddressCodes(
+    const destinationAddress = await this.resolveAddressDetails(
       order.address.province,
       order.address.district,
       order.address.ward,
     );
 
     const declaredAmount = this.getOrderDeclaredAmount(order);
-    const rates = await this.calculateFeeForAdmin({
-      ...dto,
-      amount: declaredAmount,
-      city: destinationAddress.city,
-      district: destinationAddress.district,
-      ward: destinationAddress.ward,
-    });
+    const rates = await this.calculateFeeForAdmin(
+      {
+        weight: dto.weight,
+        width: dto.width,
+        height: dto.height,
+        length: dto.length,
+        cod: dto.cod,
+        amount: declaredAmount,
+        city: destinationAddress.city,
+        district: destinationAddress.district,
+        ward: destinationAddress.ward,
+      },
+      dto.shopLocationId,
+    );
 
     return {
       orderId: order.id,
       status: order.status,
       declaredAmount,
       destination: destinationAddress,
+      origin: await this.getSenderAddressSummary(dto.shopLocationId),
       carriers: this.groupRatesByCarrier(rates),
       rates,
     };
@@ -454,20 +478,21 @@ export class ShipmentService {
       throw new BadRequestException('Order does not have a shipping address');
     }
 
-    const destinationAddress = await this.resolveAddressCodes(
+    const destinationAddress = await this.resolveAddressDetails(
       order.address.province,
       order.address.district,
       order.address.ward,
     );
 
     const declaredAmount = this.getOrderDeclaredAmount(order);
+    const senderAddress = await this.getSenderAddress(dto.shopLocationId);
     const payload = {
       shipment: {
         rate: dto.rateId,
         payer: dto.payer ?? 1,
         order_id: order.id,
         is_recall: 0,
-        address_from: this.getSenderAddress(),
+        address_from: senderAddress,
         address_to: {
           name: order.address.receiverName,
           phone: order.address.phone,
@@ -723,11 +748,11 @@ export class ShipmentService {
     }
   }
 
-  private async resolveAddressCodes(
+  async resolveAddressDetails(
     provinceValue: string,
     districtValue: string,
     wardValue: string,
-  ): Promise<{ city: string; district: string; ward: string }> {
+  ): Promise<ResolvedAddressDetails> {
     const provinces = await this.getProvinces();
     const city = this.findByIdOrName(provinces, provinceValue);
     if (!city) {
@@ -754,8 +779,11 @@ export class ShipmentService {
 
     return {
       city: city.id,
+      cityName: city.name,
       district: district.id,
+      districtName: district.name,
       ward: ward.id,
+      wardName: ward.name,
     };
   }
 
@@ -789,7 +817,20 @@ export class ShipmentService {
       .trim();
   }
 
-  private getSenderAddress() {
+  private async getSenderAddress(shopLocationId?: string) {
+    const shopLocation = await this.getActiveShopLocation(shopLocationId);
+
+    if (shopLocation) {
+      return {
+        name: shopLocation.shopName,
+        phone: shopLocation.phoneNumber,
+        street: shopLocation.detailAddress,
+        ward: shopLocation.ward,
+        district: shopLocation.district,
+        city: shopLocation.province,
+      };
+    }
+
     return {
       name: this.getRequiredConfig('GOSHIP_SENDER_NAME'),
       phone: this.getRequiredConfig('GOSHIP_SENDER_PHONE'),
@@ -798,6 +839,64 @@ export class ShipmentService {
       district: this.getSenderDistrict(),
       city: this.getSenderCity(),
     };
+  }
+
+  private async getSenderRateAddress(shopLocationId?: string) {
+    const shopLocation = await this.getActiveShopLocation(shopLocationId);
+
+    if (shopLocation) {
+      return {
+        city: shopLocation.province,
+        district: shopLocation.district,
+      };
+    }
+
+    return {
+      city: this.getSenderCity(),
+      district: this.getSenderDistrict(),
+    };
+  }
+
+  private async getSenderAddressSummary(shopLocationId?: string) {
+    const shopLocation = await this.getActiveShopLocation(shopLocationId);
+
+    if (shopLocation) {
+      return {
+        shopLocationId: shopLocation.id,
+        shopName: shopLocation.shopName,
+        city: shopLocation.province,
+        district: shopLocation.district,
+        ward: shopLocation.ward,
+        address: shopLocation.shopAddress,
+      };
+    }
+
+    return {
+      shopLocationId: null,
+      shopName: this.getRequiredConfig('GOSHIP_SENDER_NAME'),
+      city: this.getSenderCity(),
+      district: this.getSenderDistrict(),
+      ward: this.getSenderWard(),
+      address: this.getRequiredConfig('GOSHIP_SENDER_STREET'),
+    };
+  }
+
+  private async getActiveShopLocation(
+    shopLocationId?: string,
+  ): Promise<ShopLocation | null> {
+    if (!shopLocationId) return null;
+
+    const shopLocation = await this.shopLocationRepository.findOne({
+      where: { id: shopLocationId, isActive: true },
+    });
+
+    if (!shopLocation) {
+      throw new BadRequestException(
+        `Active shop location with id ${shopLocationId} not found`,
+      );
+    }
+
+    return shopLocation;
   }
 
   private getSenderCity(): string {

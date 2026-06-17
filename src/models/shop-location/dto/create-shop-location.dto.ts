@@ -1,68 +1,87 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { ApiProperty } from '@nestjs/swagger';
 import {
+  IsBoolean,
   IsNotEmpty,
-  IsNumber,
   IsOptional,
   IsString,
-  Max,
   MaxLength,
-  Min,
 } from 'class-validator';
 
 export class CreateShopLocationDto {
   @ApiProperty({
-    description: 'Shop name shown on the map',
-    example: 'Cat Bracelet Store',
+    example: 'Shop Cat Bracelet Thu Duc',
+    description: 'Shop display name',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  @MaxLength(255)
+  shopName?: string;
+
+  @ApiProperty({
+    example: '0900000000',
+    description: 'Shop phone number',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  @MaxLength(20)
+  phoneNumber?: string;
+
+  @ApiProperty({
+    example: '08:00 - 21:00',
+    description: 'Shop working hours',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  @MaxLength(255)
+  workingHours?: string;
+
+  @ApiProperty({
+    example: '700000',
+    description: 'Goship province/city id from GET /shop-location/provinces',
   })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(255)
-  shopName: string;
+  @MaxLength(100)
+  province: string;
 
   @ApiProperty({
-    description: 'Full shop address shown on Google Maps',
-    example: '123 Nguyen Hue, Ben Nghe, District 1, Ho Chi Minh City',
+    example: '701000',
+    description:
+      'Goship district id from GET /shop-location/districts/:provinceId',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  district: string;
+
+  @ApiProperty({
+    example: '701011',
+    description: 'Goship ward id from GET /shop-location/wards/:districtId',
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  ward: string;
+
+  @ApiProperty({
+    example: 'Số 31 Đường 30',
+    description: 'The detailed street address',
   })
   @IsString()
   @IsNotEmpty()
   @MaxLength(500)
-  address: string;
+  detailAddress: string;
 
   @ApiProperty({
-    description: 'Shop latitude',
-    example: 10.776889,
+    example: true,
+    description: 'Whether this shop can be used for map/shipping selection',
+    required: false,
+    default: true,
   })
-  @Type(() => Number)
-  @IsNumber()
-  @Min(-90)
-  @Max(90)
-  latitude: number;
-
-  @ApiProperty({
-    description: 'Shop longitude',
-    example: 106.700806,
-  })
-  @Type(() => Number)
-  @IsNumber()
-  @Min(-180)
-  @Max(180)
-  longitude: number;
-
-  @ApiPropertyOptional({
-    description: 'Optional Google Maps place id for this shop address',
-    example: 'ChIJ0T2NLikvdTERKxE8d61aX_E',
-  })
+  @IsBoolean()
   @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  googlePlaceId?: string;
-
-  @ApiPropertyOptional({
-    description: 'Optional public note shown with the shop location',
-    example: 'Open daily from 9:00 to 21:00',
-  })
-  @IsOptional()
-  @IsString()
-  note?: string;
+  isActive?: boolean;
 }

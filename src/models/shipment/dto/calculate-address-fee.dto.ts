@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsUUID } from 'class-validator';
+import { IsOptional, IsUUID } from 'class-validator';
 
 export class CalculateAddressFeeDto {
   @ApiProperty({
@@ -8,4 +8,13 @@ export class CalculateAddressFeeDto {
   })
   @IsUUID()
   addressId: string;
+
+  @ApiProperty({
+    example: '24e630a0-0f21-4254-9abe-c684db699ceb',
+    description: 'Optional active shop location id selected as shipping origin',
+    required: false,
+  })
+  @IsUUID()
+  @IsOptional()
+  shopLocationId?: string;
 }
