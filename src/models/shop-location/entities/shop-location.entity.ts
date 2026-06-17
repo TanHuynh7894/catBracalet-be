@@ -7,34 +7,45 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-@Entity('shop_locations')
-@Check(`latitude >= -90 AND latitude <= 90`)
-@Check(`longitude >= -180 AND longitude <= 180`)
-@Check(`status IN ('ACTIVE', 'INACTIVE')`)
+@Entity('store_locations')
+@Check(`shop_latitude >= -90 AND shop_latitude <= 90`)
+@Check(`shop_longitude >= -180 AND shop_longitude <= 180`)
 export class ShopLocation {
-  @PrimaryGeneratedColumn('uuid', { name: 'shop_location_id' })
+  @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ length: 255, name: 'shop_name' })
+  @Column({ length: 255, name: 'name' })
   shopName: string;
 
-  @Column({ length: 500 })
-  address: string;
+  @Column({ length: 500, name: 'shop_address' })
+  shopAddress: string;
 
-  @Column('double precision')
-  latitude: number;
+  @Column({ length: 20, name: 'phone_number' })
+  phoneNumber: string;
 
-  @Column('double precision')
-  longitude: number;
+  @Column({ length: 255, name: 'working_hours' })
+  workingHours: string;
 
-  @Column({ length: 255, name: 'google_place_id', nullable: true })
-  googlePlaceId?: string;
+  @Column('numeric', {
+    name: 'shop_latitude',
+    transformer: {
+      from: (value: string | number) => Number(value),
+      to: (value: number) => value,
+    },
+  })
+  shopLatitude: number;
 
-  @Column({ type: 'text', nullable: true })
-  note?: string;
+  @Column('numeric', {
+    name: 'shop_longitude',
+    transformer: {
+      from: (value: string | number) => Number(value),
+      to: (value: number) => value,
+    },
+  })
+  shopLongitude: number;
 
-  @Column({ length: 20, default: 'ACTIVE' })
-  status: string;
+  @Column({ name: 'is_active', default: true })
+  isActive: boolean;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

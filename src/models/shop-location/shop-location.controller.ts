@@ -26,7 +26,7 @@ export class ShopLocationController {
 
   @Post()
   @ApiOperation({
-    summary: 'Save shop location latitude and longitude for Google Maps',
+    summary: 'Save shop address and geocode coordinates with Nominatim',
   })
   @ApiCreatedResponse({ type: ShopLocation })
   create(@Body() createShopLocationDto: CreateShopLocationDto) {

@@ -1,21 +1,20 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TABLE IF NOT EXISTS shop_locations (
-  shop_location_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  shop_name varchar(255) NOT NULL,
-  address varchar(500) NOT NULL,
-  latitude double precision NOT NULL,
-  longitude double precision NOT NULL,
-  google_place_id varchar(255),
-  note text,
-  status varchar(20) NOT NULL DEFAULT 'ACTIVE',
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT chk_shop_locations_latitude CHECK (latitude >= -90 AND latitude <= 90),
-  CONSTRAINT chk_shop_locations_longitude CHECK (longitude >= -180 AND longitude <= 180),
-  CONSTRAINT chk_shop_locations_status CHECK (status IN ('ACTIVE', 'INACTIVE'))
+CREATE TABLE IF NOT EXISTS store_locations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name varchar(255) NOT NULL,
+  shop_address varchar(500) NOT NULL,
+  phone_number varchar(20) NOT NULL,
+  working_hours varchar(255) NOT NULL,
+  shop_latitude numeric NOT NULL,
+  shop_longitude numeric NOT NULL,
+  is_active boolean DEFAULT true,
+  created_at timestamp DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT chk_store_locations_latitude CHECK (shop_latitude >= -90 AND shop_latitude <= 90),
+  CONSTRAINT chk_store_locations_longitude CHECK (shop_longitude >= -180 AND shop_longitude <= 180)
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_shop_locations_one_active
-  ON shop_locations ((status))
-  WHERE status = 'ACTIVE';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_store_locations_one_active
+  ON store_locations ((is_active))
+  WHERE is_active = true;
