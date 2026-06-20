@@ -5,8 +5,8 @@ import { TicketMessageEntity } from './entities/ticket-message.entity';
 import { CreateTicketMessageDto } from './dto/create-ticket-message.dto';
 
 // Import Service và Gateway từ module Notifications
-import { NotificationsService } from '../../notifications/notifications.service';
-import { NotificationsGateway } from '../../notifications/notifications.gateway';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
 
 @Injectable()
 export class TicketMessagesService {
@@ -33,7 +33,7 @@ export class TicketMessagesService {
     try {
       // Tạo bản ghi thông báo trong DB trước để không bị mất dữ liệu
       const newNotif = await this.notificationsService.createNotification({
-        title: 'Tin nhắn hỗ trợ mới! 💬',
+        title: 'Tin nhắn hỗ trợ mới!',
         message: `Có tin nhắn mới trong Ticket #${savedMessage.ticket_id}`, 
         type: 'MESSAGE',
         relatedId: savedMessage.ticket_id.toString(), 

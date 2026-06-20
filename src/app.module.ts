@@ -24,7 +24,7 @@ import { ConsultationRegistrationsModule } from './models/consultation-registrat
 import { ShipmentModule } from './models/shipment/shipment.module';
 import { TicketMessagesModule } from './models/ticket-messages/ticket-messages.module';
 import { SupportTicketsModule } from './models/support-tickets/support-tickets.module';
-import { NotificationsModule } from './notifications/notifications.module';
+import { NotificationsModule } from './models/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -93,7 +93,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 export class AppModule {
   constructor() {
     console.log(
-      '✅ Connection to the Database has been successfully established.',
+      'Connection to the Database has been successfully established.',
     );
   }
 }

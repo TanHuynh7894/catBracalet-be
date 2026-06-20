@@ -26,8 +26,8 @@ import {
   ORDER_STATUSES,
   OrderStatus,
 } from './constants/order-status.constants';
-import { NotificationsService } from '../../notifications/notifications.service';
-import { NotificationsGateway } from '../../notifications/notifications.gateway';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
 
 @Injectable()
 export class OrdersService {
@@ -148,7 +148,7 @@ export class OrdersService {
 
     try {
       const newNotif = await this.notificationsService.createNotification({
-        title: 'Đơn hàng mới! 📦',
+        title: 'Đơn hàng mới!',
         message: `Khách hàng vừa đặt đơn #${checkoutResult.order.id} (Chờ thanh toán)`,
         type: 'ORDER',
         relatedId: checkoutResult.order.id.toString(),
