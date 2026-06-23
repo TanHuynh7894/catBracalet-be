@@ -121,7 +121,9 @@ export class ProductsController {
 
   // 3. THÊM ENDPOINT LỌC SẢN PHẨM Ở ĐÂY (Đặt trước Get(':id'))
   @Get('filter')
-  @ApiOperation({ summary: 'Filter products by variants (color, stone type, size, price)' })
+  @ApiOperation({
+    summary: 'Filter products by variants (color, stone type, size, price)',
+  })
   @ApiOkResponse({ type: Product, isArray: true })
   filterProducts(@Query() filterDto: FilterProductDto) {
     return this.productsService.filterProducts(filterDto);

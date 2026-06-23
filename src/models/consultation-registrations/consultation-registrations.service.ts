@@ -12,7 +12,9 @@ export class ConsultationRegistrationsService {
     private readonly registrationRepository: Repository<ConsultationRegistration>,
   ) {}
 
-  async create(createDto: CreateConsultationRegistrationDto): Promise<ConsultationRegistration> {
+  async create(
+    createDto: CreateConsultationRegistrationDto,
+  ): Promise<ConsultationRegistration> {
     const newRegistration = this.registrationRepository.create(createDto);
     return await this.registrationRepository.save(newRegistration);
   }
@@ -32,7 +34,9 @@ export class ConsultationRegistrationsService {
     });
 
     if (!registration) {
-      throw new NotFoundException(`Consultation Registration with id ${id} not found`);
+      throw new NotFoundException(
+        `Consultation Registration with id ${id} not found`,
+      );
     }
 
     return registration;

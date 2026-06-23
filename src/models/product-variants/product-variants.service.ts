@@ -30,7 +30,7 @@ export class ProductVariantsService {
     private readonly productVariantRepository: Repository<ProductVariant>,
     @InjectRepository(Product)
     private readonly productRepository: Repository<Product>,
-  ) { }
+  ) {}
 
   async create(
     createProductVariantDto: CreateProductVariantDto,
@@ -332,9 +332,10 @@ export class ProductVariantsService {
     const productVariant = await this.findOneEntity(id);
 
     // 2. Toggle trạng thái giữa ACTIVE và INACTIVE
-    productVariant.status = productVariant.status === ProductVariantStatus.INACTIVE
-      ? ProductVariantStatus.ACTIVE
-      : ProductVariantStatus.INACTIVE;
+    productVariant.status =
+      productVariant.status === ProductVariantStatus.INACTIVE
+        ? ProductVariantStatus.ACTIVE
+        : ProductVariantStatus.INACTIVE;
 
     // 3. Lưu thay đổi vào database
     await this.productVariantRepository.save(productVariant);

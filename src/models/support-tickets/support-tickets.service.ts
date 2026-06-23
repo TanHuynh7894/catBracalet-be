@@ -21,8 +21,8 @@ export class SupportTicketsService {
 
   // 2. Lấy danh sách toàn bộ Ticket (Dành cho Admin)
   async findAllTickets(): Promise<SupportTicket[]> {
-    return await this.ticketRepository.find({ 
-      order: { created_at: 'DESC' } 
+    return await this.ticketRepository.find({
+      order: { created_at: 'DESC' },
     });
   }
 
@@ -30,7 +30,7 @@ export class SupportTicketsService {
   async findTicketsByUser(userId: string): Promise<SupportTicket[]> {
     return await this.ticketRepository.find({
       where: { user_id: userId },
-      order: { created_at: 'DESC' }
+      order: { created_at: 'DESC' },
     });
   }
 
@@ -40,7 +40,7 @@ export class SupportTicketsService {
     if (!ticket) {
       throw new NotFoundException(`Không tìm thấy Ticket với ID: ${id}`);
     }
-    
+
     ticket.status = 'closed';
     return await this.ticketRepository.save(ticket);
   }

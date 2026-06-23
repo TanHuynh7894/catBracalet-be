@@ -12,7 +12,9 @@ import { JwtService } from '@nestjs/jwt';
 import { TicketMessagesService } from '../../ticket-messages/ticket-messages.service';
 
 @WebSocketGateway({ cors: { origin: '*' } })
-export class TicketsGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class TicketsGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
@@ -30,7 +32,9 @@ export class TicketsGateway implements OnGatewayConnection, OnGatewayDisconnect 
       const decodedUser = await this.jwtService.verifyAsync(token);
 
       client.data.user = decodedUser;
-      console.log(`[SOCKET] User kết nối: ${decodedUser.userId || decodedUser.id}`);
+      console.log(
+        `[SOCKET] User kết nối: ${decodedUser.userId || decodedUser.id}`,
+      );
     } catch (error) {
       console.log(`[SOCKET] Từ chối kết nối: ${(error as Error).message}`);
       client.disconnect();
@@ -50,9 +54,11 @@ export class TicketsGateway implements OnGatewayConnection, OnGatewayDisconnect 
     const data = typeof payload === 'string' ? JSON.parse(payload) : payload;
     client.join(data.ticket_id);
     console.log(`[SOCKET] Client ${client.id} đã vào phòng: ${data.ticket_id}`);
-    
+
     // Gửi lại lịch sử chat cho người vừa join
-    const history = await this.ticketMessagesService.getMessagesByTicketId(data.ticket_id);
+    const history = await this.ticketMessagesService.getMessagesByTicketId(
+      data.ticket_id,
+    );
     client.emit('chatHistory', history);
   }
 

@@ -5,7 +5,7 @@ import { TicketMessagesService } from './ticket-messages.service';
 export class TicketMessagesController {
   constructor(private readonly ticketMessagesService: TicketMessagesService) {}
 
-  // API: GET /ticket-messages/:ticketId 
+  // API: GET /ticket-messages/:ticketId
   // Dùng để Frontend gọi lấy lịch sử tin nhắn khi vừa mở khung chat
   @Get(':ticketId')
   getMessagesByTicket(@Param('ticketId') ticketId: string) {

@@ -22,7 +22,9 @@ export class ShopLocationService {
 
   async create(dto: CreateShopLocationDto): Promise<ShopLocation> {
     const resolvedAddress = await this.resolveShopAddress(dto);
-    const coordinates = await this.geocodeAddress(resolvedAddress.fullAddress);
+    const coordinates = await this.geocodeAddress(
+      resolvedAddress.geocodeCandidates,
+    );
 
     const location = this.shopLocationRepository.create({
       shopName: dto.shopName ?? 'Shop Location',
@@ -100,7 +102,7 @@ export class ShopLocationService {
         })
       : null;
     const coordinates = addressPatch
-      ? await this.geocodeAddress(addressPatch.fullAddress)
+      ? await this.geocodeAddress(addressPatch.geocodeCandidates)
       : {};
 
     this.shopLocationRepository.merge(location, {
@@ -150,16 +152,27 @@ export class ShopLocationService {
       address.wardName,
       address.districtName,
       address.cityName,
-      'Việt Nam',
+      'Viet Nam',
     ]
       .filter(Boolean)
       .join(', ');
+    const geocodeCandidates = [
+      fullAddress,
+      [address.wardName, address.districtName, address.cityName, 'Viet Nam']
+        .filter(Boolean)
+        .join(', '),
+      [address.districtName, address.cityName, 'Viet Nam']
+        .filter(Boolean)
+        .join(', '),
+      [address.cityName, 'Viet Nam'].filter(Boolean).join(', '),
+    ];
 
     return {
       province: address.city,
       district: address.district,
       ward: address.ward,
       fullAddress,
+      geocodeCandidates,
     };
   }
 
@@ -169,42 +182,46 @@ export class ShopLocationService {
     );
   }
 
-  private async geocodeAddress(shopAddress: string) {
+  private async geocodeAddress(shopAddresses: string[]) {
     try {
-      const encodedAddress = encodeURIComponent(shopAddress);
-      const response = await axios.get(
-        `https://nominatim.openstreetmap.org/search?q=${encodedAddress}&format=json&limit=1`,
-        {
-          headers: {
-            'User-Agent': 'CatBraceletBE/1.0 (shop-location-geocoding)',
-            Referer: 'http://localhost:3000',
+      for (const shopAddress of [...new Set(shopAddresses.filter(Boolean))]) {
+        const encodedAddress = encodeURIComponent(shopAddress);
+        const response = await axios.get(
+          `https://nominatim.openstreetmap.org/search?q=${encodedAddress}&format=json&limit=1`,
+          {
+            headers: {
+              'User-Agent': 'CatBraceletBE/1.0 (shop-location-geocoding)',
+              Referer: 'http://localhost:3000',
+            },
           },
-        },
-      );
+        );
 
-      if (!Array.isArray(response.data) || response.data.length === 0) {
-        throw new BadRequestException('Không tìm thấy tọa độ cho địa chỉ này');
+        if (!Array.isArray(response.data) || response.data.length === 0) {
+          continue;
+        }
+
+        const result = response.data[0];
+        const shopLatitude = Number(result.lat);
+        const shopLongitude = Number(result.lon);
+
+        if (!Number.isFinite(shopLatitude) || !Number.isFinite(shopLongitude)) {
+          continue;
+        }
+
+        return {
+          shopLatitude,
+          shopLongitude,
+        };
       }
 
-      const result = response.data[0];
-      const shopLatitude = Number(result.lat);
-      const shopLongitude = Number(result.lon);
-
-      if (!Number.isFinite(shopLatitude) || !Number.isFinite(shopLongitude)) {
-        throw new BadRequestException('Không tìm thấy tọa độ cho địa chỉ này');
-      }
-
-      return {
-        shopLatitude,
-        shopLongitude,
-      };
+      throw new BadRequestException('Cannot find coordinates for this address');
     } catch (error) {
       if (error instanceof BadRequestException) {
         throw error;
       }
 
       throw new InternalServerErrorException(
-        'Không thể geocode địa chỉ, vui lòng thử lại sau',
+        'Cannot geocode address, please try again later',
       );
     }
   }
