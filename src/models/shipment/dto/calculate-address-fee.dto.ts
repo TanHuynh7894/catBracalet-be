@@ -1,7 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsOptional, IsUUID } from 'class-validator';
+import { IsArray, IsOptional, IsUUID } from 'class-validator';
 
 export class CalculateAddressFeeDto {
+  @ApiProperty({
+    example: '2d3dbd2f-b08f-4d7a-89db-9c2f40f31c98',
+    description:
+      'User id used to read cart items and select the nearest shop with enough inventory',
+    required: false,
+  })
+  @IsUUID()
+  @IsOptional()
+  userId?: string;
+
   @ApiProperty({
     example: '09047a40-bc72-4b06-abf8-9a82682478fe',
     description: 'User address id selected for shipping fee calculation',
@@ -10,11 +20,17 @@ export class CalculateAddressFeeDto {
   addressId: string;
 
   @ApiProperty({
-    example: '24e630a0-0f21-4254-9abe-c684db699ceb',
-    description: 'Optional active shop location id selected as shipping origin',
+    example: [
+      'a9f3df22-bf0d-4cab-a34c-dfdfb9cb0801',
+      '8bd61567-12b8-41f0-bdf0-efadcbaf96aa',
+    ],
+    description:
+      'Cart item ids to estimate. Omit this field to estimate the whole cart.',
     required: false,
+    type: [String],
   })
-  @IsUUID()
   @IsOptional()
-  shopLocationId?: string;
+  @IsArray()
+  @IsUUID('4', { each: true })
+  cartItemIds?: string[];
 }

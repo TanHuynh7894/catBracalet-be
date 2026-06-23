@@ -18,6 +18,9 @@ import { VipService } from '../VIP/vip.service';
 import { Shipment } from './entities/shipment.entity';
 import { ShopLocation } from '../shop-location/entities/shop-location.entity';
 import { ShopInventory } from '../shop-location/entities/shop-inventory.entity';
+import { Cart } from '../carts/entities/cart.entity';
+import { CartItem } from '../cart_items/entities/cart-item.entity';
+import { OrderItemsService } from '../order-items/order-items.service';
 import { AdminCreateShipmentDto } from './dto/admin-create-shipment.dto';
 import { CalculateAddressFeeDto } from './dto/calculate-address-fee.dto';
 import { CalculateFeeDto } from './dto/calculate-fee.dto';
@@ -117,9 +120,14 @@ export class ShipmentService {
     private readonly shopLocationRepository: Repository<ShopLocation>,
     @InjectRepository(ShopInventory)
     private readonly shopInventoryRepository: Repository<ShopInventory>,
+    @InjectRepository(Cart)
+    private readonly cartRepository: Repository<Cart>,
+    @InjectRepository(CartItem)
+    private readonly cartItemRepository: Repository<CartItem>,
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
     private readonly vipService: VipService,
+    private readonly orderItemsService: OrderItemsService,
   ) {
     this.loadLocalData();
   }
@@ -307,7 +315,78 @@ export class ShipmentService {
       );
     }
 
-    return this.calculateFeeForAddress(address, {}, dto.shopLocationId);
+    if (dto.userId && address.userId !== dto.userId) {
+      throw new BadRequestException(
+        'Selected address does not belong to this user',
+      );
+    }
+
+    if (!dto.userId) {
+      return this.calculateFeeForAddress(address);
+    }
+
+    const cartItems = await this.getCartItemsForShippingEstimate(
+      dto.userId,
+      dto.cartItemIds,
+    );
+    const { productSubtotal } =
+      this.orderItemsService.prepareFromCartItems(cartItems);
+    const fulfillmentShop = await this.selectFulfillmentShopForCheckout(
+      address,
+      cartItems.map((item) => ({
+        variantId: item.variantId,
+        quantity: item.quantity,
+      })),
+    );
+    const fee = await this.calculateFeeForAddress(
+      address,
+      { amount: productSubtotal },
+      fulfillmentShop.shopLocation.id,
+    );
+
+    return {
+      ...fee,
+      selectedShopDistanceKm: fulfillmentShop.distanceKm,
+      inventoryEnforced: fulfillmentShop.inventoryEnforced,
+    };
+  }
+
+  private async getCartItemsForShippingEstimate(
+    userId: string,
+    cartItemIds?: string[],
+  ): Promise<CartItem[]> {
+    const cart = await this.cartRepository.findOne({ where: { userId } });
+    if (!cart) {
+      throw new NotFoundException('Cart was not found for this user');
+    }
+
+    const allCartItems = await this.cartItemRepository.find({
+      where: { cartId: cart.id },
+      relations: [
+        'variant',
+        'variant.productVariantMappings',
+        'variant.productVariantMappings.product',
+      ],
+    });
+    const selectedCartItemIds = new Set(cartItemIds ?? []);
+    const cartItems = selectedCartItemIds.size
+      ? allCartItems.filter((item) => selectedCartItemIds.has(item.id))
+      : allCartItems;
+
+    if (
+      selectedCartItemIds.size &&
+      cartItems.length !== selectedCartItemIds.size
+    ) {
+      throw new BadRequestException(
+        'One or more selected cart items were not found in this cart',
+      );
+    }
+
+    if (!cartItems.length) {
+      throw new BadRequestException('Cart is empty');
+    }
+
+    return cartItems;
   }
 
   async selectFulfillmentShopForCheckout(
