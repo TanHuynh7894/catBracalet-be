@@ -27,6 +27,7 @@ import { RolesGuard } from '../../auth/guards/roles.guard';
 import { AdminCreateShipmentDto } from './dto/admin-create-shipment.dto';
 import { CalculateAddressFeeDto } from './dto/calculate-address-fee.dto';
 import { CalculateOrderRatesDto } from './dto/calculate-order-rates.dto';
+import { ListShopOptionsDto } from './dto/list-shop-options.dto';
 import { GoshipWebhookDto } from './dto/goship-webhook.dto';
 import { ShipmentService } from './shipment.service';
 
@@ -62,6 +63,26 @@ export class ShipmentController {
   })
   calculateForClient(@Body() dto: CalculateAddressFeeDto) {
     return this.shipmentService.calculateFeeForClientAddress(dto);
+  }
+
+  @Post('shop-options')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'List active shop options sorted by distance for owner selection',
+  })
+  listShopOptions(@Body() dto: ListShopOptionsDto) {
+    return this.shipmentService.listShopOptionsForAddress(dto);
+  }
+
+  @Get('orders/:orderId/shop-options')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'STAFF')
+  @ApiOperation({
+    summary:
+      'List active shop options sorted by distance for a confirmed order',
+  })
+  listShopOptionsForOrder(@Param('orderId') orderId: string) {
+    return this.shipmentService.listShopOptionsForOrder(orderId);
   }
 
   @Post('orders/:orderId/rates')

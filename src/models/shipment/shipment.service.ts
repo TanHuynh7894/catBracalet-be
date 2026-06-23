@@ -6,7 +6,7 @@ import {
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { isAxiosError } from 'axios';
+import axios, { isAxiosError } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import { Repository } from 'typeorm';
 import * as fs from 'fs';
@@ -21,6 +21,7 @@ import { AdminCreateShipmentDto } from './dto/admin-create-shipment.dto';
 import { CalculateAddressFeeDto } from './dto/calculate-address-fee.dto';
 import { CalculateFeeDto } from './dto/calculate-fee.dto';
 import { CalculateOrderRatesDto } from './dto/calculate-order-rates.dto';
+import { ListShopOptionsDto } from './dto/list-shop-options.dto';
 import { GoshipWebhookDto } from './dto/goship-webhook.dto';
 
 export interface GoshipProvince {
@@ -81,6 +82,19 @@ export interface ResolvedAddressDetails {
   districtName: string;
   ward: string;
   wardName: string;
+}
+
+export interface Coordinates {
+  latitude: number;
+  longitude: number;
+}
+
+interface ShopOptionSelection {
+  shopLocation: ShopLocation;
+  destination: ResolvedAddressDetails;
+  destinationCoordinates: Coordinates;
+  distanceKm: number;
+  recommended: boolean;
 }
 
 @Injectable()
@@ -291,8 +305,40 @@ export class ShipmentService {
     return this.calculateFeeForAddress(address, {}, dto.shopLocationId);
   }
 
+  async listShopOptionsForAddress(dto: ListShopOptionsDto) {
+    const address = await this.userAddressRepository.findOne({
+      where: { id: dto.addressId, status: 'ACTIVE' },
+    });
+
+    if (!address) {
+      throw new NotFoundException(
+        `Active address with id ${dto.addressId} not found`,
+      );
+    }
+
+    return this.listShopOptionsForAddressEntity(address);
+  }
+
+  async listShopOptionsForOrder(orderId: string) {
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId },
+      relations: ['address'],
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with id ${orderId} not found`);
+    }
+
+    if (!order.address) {
+      throw new BadRequestException('Order does not have a shipping address');
+    }
+
+    return this.listShopOptionsForAddressEntity(order.address);
+  }
+
   async calculateFeeForAddress(
-    address: Pick<UserAddress, 'province' | 'district' | 'ward'>,
+    address: Pick<UserAddress, 'province' | 'district' | 'ward'> &
+      Partial<Pick<UserAddress, 'detailAddress'>>,
     parcel: Omit<CalculateFeeDto, 'city' | 'district' | 'ward'> = {},
     shopLocationId?: string,
   ) {
@@ -301,8 +347,7 @@ export class ShipmentService {
       address.district,
       address.ward,
     );
-
-    return this.calculateFeeForClient(
+    const fee = await this.calculateFeeForClient(
       {
         ...parcel,
         city: destinationAddress.city,
@@ -311,6 +356,11 @@ export class ShipmentService {
       },
       shopLocationId,
     );
+
+    return {
+      ...fee,
+      origin: await this.getSenderAddressSummary(shopLocationId),
+    };
   }
 
   async calculateFeeForAdmin(dto: CalculateFeeDto, shopLocationId?: string) {
@@ -815,6 +865,154 @@ export class ShipmentService {
       .replace(/^(quan|huyen|thi xa|thi tran|phuong|xa)\s+/, '')
       .replace(/\s+/g, ' ')
       .trim();
+  }
+
+  private async listShopOptionsForAddressEntity(
+    address: Pick<UserAddress, 'province' | 'district' | 'ward'> &
+      Partial<Pick<UserAddress, 'detailAddress'>>,
+  ) {
+    const activeShops = await this.shopLocationRepository.find({
+      where: { isActive: true },
+    });
+    const shopsWithCoordinates = activeShops.filter(
+      (shop) =>
+        Number.isFinite(Number(shop.shopLatitude)) &&
+        Number.isFinite(Number(shop.shopLongitude)),
+    );
+
+    if (!shopsWithCoordinates.length) {
+      throw new BadRequestException(
+        'No active shop locations with coordinates were found',
+      );
+    }
+
+    const destination = await this.resolveAddressDetails(
+      address.province,
+      address.district,
+      address.ward,
+    );
+    const destinationCoordinates = await this.geocodeUserAddress(
+      address,
+      destination,
+    );
+    const options = shopsWithCoordinates
+      .map((shopLocation) => ({
+        shopLocation,
+        destination,
+        destinationCoordinates,
+        distanceKm: this.calculateDistanceKm(
+          {
+            latitude: Number(shopLocation.shopLatitude),
+            longitude: Number(shopLocation.shopLongitude),
+          },
+          destinationCoordinates,
+        ),
+        recommended: false,
+      }))
+      .sort((left, right) => left.distanceKm - right.distanceKm);
+
+    if (options[0]) {
+      options[0].recommended = true;
+    }
+
+    return {
+      destination,
+      destinationCoordinates,
+      options: options.map((option) => this.formatShopOptionSelection(option)),
+    };
+  }
+
+  private async geocodeUserAddress(
+    address: Partial<Pick<UserAddress, 'detailAddress'>>,
+    details: ResolvedAddressDetails,
+  ): Promise<Coordinates> {
+    const candidates = [
+      [
+        address.detailAddress,
+        details.wardName,
+        details.districtName,
+        details.cityName,
+        'Viet Nam',
+      ],
+      [details.wardName, details.districtName, details.cityName, 'Viet Nam'],
+      [details.districtName, details.cityName, 'Viet Nam'],
+      [details.cityName, 'Viet Nam'],
+    ]
+      .map((parts) => parts.filter(Boolean).join(', '))
+      .filter(Boolean);
+
+    for (const candidate of [...new Set(candidates)]) {
+      const response = await axios.get(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(candidate)}&format=json&limit=1`,
+        {
+          headers: {
+            'User-Agent': 'CatBraceletBE/1.0 (shipment-shop-options)',
+            Referer: 'http://localhost:3000',
+          },
+          timeout: 5000,
+        },
+      );
+
+      if (!Array.isArray(response.data) || response.data.length === 0) {
+        continue;
+      }
+
+      const result = response.data[0];
+      const latitude = Number(result.lat);
+      const longitude = Number(result.lon);
+
+      if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+        return { latitude, longitude };
+      }
+    }
+
+    throw new BadRequestException(
+      'Cannot find destination coordinates for shop option listing',
+    );
+  }
+
+  private calculateDistanceKm(from: Coordinates, to: Coordinates): number {
+    const earthRadiusKm = 6371;
+    const latDelta = this.toRadians(to.latitude - from.latitude);
+    const lonDelta = this.toRadians(to.longitude - from.longitude);
+    const fromLat = this.toRadians(from.latitude);
+    const toLat = this.toRadians(to.latitude);
+    const haversine =
+      Math.sin(latDelta / 2) ** 2 +
+      Math.cos(fromLat) * Math.cos(toLat) * Math.sin(lonDelta / 2) ** 2;
+
+    return Number(
+      (
+        2 *
+        earthRadiusKm *
+        Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine))
+      ).toFixed(2),
+    );
+  }
+
+  private toRadians(value: number): number {
+    return (value * Math.PI) / 180;
+  }
+
+  private formatShopOptionSelection(selection: ShopOptionSelection) {
+    return {
+      shopLocation: {
+        id: selection.shopLocation.id,
+        shopName: selection.shopLocation.shopName,
+        shopAddress: selection.shopLocation.shopAddress,
+        province: selection.shopLocation.province,
+        district: selection.shopLocation.district,
+        ward: selection.shopLocation.ward,
+        detailAddress: selection.shopLocation.detailAddress,
+        phoneNumber: selection.shopLocation.phoneNumber,
+        workingHours: selection.shopLocation.workingHours,
+        shopLatitude: selection.shopLocation.shopLatitude,
+        shopLongitude: selection.shopLocation.shopLongitude,
+        isActive: selection.shopLocation.isActive,
+      },
+      distanceKm: selection.distanceKm,
+      recommended: selection.recommended,
+    };
   }
 
   private async getSenderAddress(shopLocationId?: string) {
