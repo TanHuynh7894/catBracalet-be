@@ -8,15 +8,22 @@ import axios from 'axios';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateShopLocationDto } from './dto/create-shop-location.dto';
+import { UpdateShopInventoryDto } from './dto/update-shop-inventory.dto';
 import { UpdateShopLocationDto } from './dto/update-shop-location.dto';
+import { ShopInventory } from './entities/shop-inventory.entity';
 import { ShopLocation } from './entities/shop-location.entity';
 import { ShipmentService } from '../shipment/shipment.service';
+import { ProductVariant } from '../product-variants/entities/product-variant.entity';
 
 @Injectable()
 export class ShopLocationService {
   constructor(
     @InjectRepository(ShopLocation)
     private readonly shopLocationRepository: Repository<ShopLocation>,
+    @InjectRepository(ShopInventory)
+    private readonly shopInventoryRepository: Repository<ShopInventory>,
+    @InjectRepository(ProductVariant)
+    private readonly productVariantRepository: Repository<ProductVariant>,
     private readonly shipmentService: ShipmentService,
   ) {}
 
@@ -134,6 +141,49 @@ export class ShopLocationService {
 
     location.isActive = false;
     return this.shopLocationRepository.save(location);
+  }
+
+  async getInventory(shopLocationId: string): Promise<ShopInventory[]> {
+    await this.findOne(shopLocationId);
+
+    return this.shopInventoryRepository.find({
+      where: { shopLocationId },
+      relations: ['variant'],
+      order: { variantId: 'ASC' },
+    });
+  }
+
+  async setInventory(
+    shopLocationId: string,
+    variantId: string,
+    dto: UpdateShopInventoryDto,
+  ): Promise<ShopInventory> {
+    await this.findOne(shopLocationId);
+
+    const variant = await this.productVariantRepository.findOneBy({
+      id: variantId,
+    });
+    if (!variant) {
+      throw new NotFoundException(
+        `Product variant with id ${variantId} not found`,
+      );
+    }
+
+    let inventory = await this.shopInventoryRepository.findOne({
+      where: { shopLocationId, variantId },
+    });
+
+    if (!inventory) {
+      inventory = this.shopInventoryRepository.create({
+        shopLocationId,
+        variantId,
+        stockQuantity: dto.stockQuantity,
+      });
+    } else {
+      inventory.stockQuantity = dto.stockQuantity;
+    }
+
+    return this.shopInventoryRepository.save(inventory);
   }
 
   private async resolveShopAddress(

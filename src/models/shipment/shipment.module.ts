@@ -8,10 +8,17 @@ import { Order } from '../orders/entities/order.entity';
 import { UserAddress } from '../user_address/entities/user_address.entity';
 import { VipModule } from '../VIP/vip.module';
 import { ShopLocation } from '../shop-location/entities/shop-location.entity';
+import { ShopInventory } from '../shop-location/entities/shop-inventory.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Shipment, Order, UserAddress, ShopLocation]),
+    TypeOrmModule.forFeature([
+      Shipment,
+      Order,
+      UserAddress,
+      ShopLocation,
+      ShopInventory,
+    ]),
     HttpModule,
     VipModule,
   ],
