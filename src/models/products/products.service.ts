@@ -25,7 +25,7 @@ export class ProductsService {
 
     // Inject ConfigService để lấy giá trị biến môi trường (.env)
     private readonly configService: ConfigService,
-  ) { }
+  ) {}
 
   /**
    * Helper function xuất ra: URL_BASE_BE + THUMBNAIL GỐC
@@ -33,15 +33,21 @@ export class ProductsService {
   private formatProductImageUrl(product: Product): Product {
     if (product && product.thumbnail) {
       // Đọc trực tiếp từ configService mỗi khi hàm chạy để đảm bảo không bị cache chuỗi rỗng
-      const baseUrl = this.configService.get<string>('url_base_BE') || 'http://localhost:3000';
+      const baseUrl =
+        this.configService.get<string>('url_base_BE') ||
+        'http://localhost:3000';
 
       console.log('--- LOG DEBUG ---');
       console.log('KEY URL_BASE_BE ĐỌC ĐƯỢC:', baseUrl);
       console.log('THUMBNAIL GỐC TRONG DB:', product.thumbnail);
 
       // Làm sạch các dấu gạch chéo dư thừa trước khi nối chuỗi
-      const cleanBaseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-      const cleanThumbnail = product.thumbnail.startsWith('/') ? product.thumbnail : `/${product.thumbnail}`;
+      const cleanBaseUrl = baseUrl.endsWith('/')
+        ? baseUrl.slice(0, -1)
+        : baseUrl;
+      const cleanThumbnail = product.thumbnail.startsWith('/')
+        ? product.thumbnail
+        : `/${product.thumbnail}`;
 
       // Gán đè kết quả nối chuỗi trực tiếp
       product.thumbnail = `${cleanBaseUrl}${cleanThumbnail}`;
@@ -173,9 +179,10 @@ export class ProductsService {
     }
 
     // Toggle trạng thái giữa ACTIVE và INACTIVE
-    product.status = product.status === ProductStatus.INACTIVE
-      ? ProductStatus.ACTIVE
-      : ProductStatus.INACTIVE;
+    product.status =
+      product.status === ProductStatus.INACTIVE
+        ? ProductStatus.ACTIVE
+        : ProductStatus.INACTIVE;
 
     const savedProduct = await this.productRepository.save(product);
 
@@ -194,9 +201,11 @@ export class ProductsService {
 
   async filterProducts(filterDto: FilterProductDto): Promise<Product[]> {
     // Thêm stoneColor vào lúc destructuring
-    const { color, stoneColor, stoneType, size, minPrice, maxPrice } = filterDto;
+    const { color, stoneColor, stoneType, size, minPrice, maxPrice } =
+      filterDto;
 
-    const query = this.productRepository.createQueryBuilder('product')
+    const query = this.productRepository
+      .createQueryBuilder('product')
       .leftJoinAndSelect('product.product_materials', 'product_materials')
       .leftJoinAndSelect('product_materials.material', 'material')
       .where('product.status = :status', { status: ProductStatus.ACTIVE });
@@ -217,8 +226,17 @@ export class ProductsService {
 
     // 3. Lọc Kích cỡ (Nằm trong bảng variant)
     if (size) {
-      query.innerJoin('product_variant_mapping', 'mapping', 'mapping.product_id = product.id')
-        .innerJoin('product_variants', 'variant', 'variant.id = mapping.variant_id')
+      query
+        .innerJoin(
+          'product_variant_mapping',
+          'mapping',
+          'mapping.product_id = product.id',
+        )
+        .innerJoin(
+          'product_variants',
+          'variant',
+          'variant.id = mapping.variant_id',
+        )
         .andWhere('variant.size = :size', { size });
     }
 

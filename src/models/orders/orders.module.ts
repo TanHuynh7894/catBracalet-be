@@ -34,7 +34,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     VipModule,
     PaymentsModule,
     OrderItemsModule,
-    NotificationsModule, 
+    NotificationsModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService],

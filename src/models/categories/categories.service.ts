@@ -86,9 +86,10 @@ export class CategoriesService {
     const category = await this.findOne(id);
 
     // Nếu đang ACTIVE thì chuyển thành INACTIVE, ngược lại thì thành ACTIVE
-    category.status = category.status === CategoryStatus.ACTIVE 
-      ? CategoryStatus.INACTIVE 
-      : CategoryStatus.ACTIVE;
+    category.status =
+      category.status === CategoryStatus.ACTIVE
+        ? CategoryStatus.INACTIVE
+        : CategoryStatus.ACTIVE;
 
     return await this.categoryRepository.save(category);
   }

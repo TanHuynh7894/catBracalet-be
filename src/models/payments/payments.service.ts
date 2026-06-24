@@ -75,8 +75,7 @@ export class PaymentsService {
       overrideUrl?.trim() || this.configService.get<string>(configKey)?.trim();
 
     const redirectUrl =
-      configuredUrl ||
-      this.getPaymentRedirectBaseUrl(configKey, fallbackPath);
+      configuredUrl || this.getPaymentRedirectBaseUrl(configKey, fallbackPath);
 
     return this.appendQueryParams(redirectUrl, query);
   }

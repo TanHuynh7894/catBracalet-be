@@ -25,6 +25,7 @@ import { ShipmentModule } from './models/shipment/shipment.module';
 import { TicketMessagesModule } from './models/ticket-messages/ticket-messages.module';
 import { SupportTicketsModule } from './models/support-tickets/support-tickets.module';
 import { NotificationsModule } from './models/notifications/notifications.module';
+import { ShopLocationModule } from './models/shop-location/shop-location.module';
 
 @Module({
   imports: [
@@ -86,6 +87,7 @@ import { NotificationsModule } from './models/notifications/notifications.module
     TicketMessagesModule,
     SupportTicketsModule,
     NotificationsModule,
+    ShopLocationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

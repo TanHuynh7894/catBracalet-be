@@ -88,9 +88,10 @@ export class MaterialsService {
     const material = await this.findOne(id);
 
     // Nếu đang ACTIVE thì chuyển thành INACTIVE, ngược lại thì thành ACTIVE
-    material.status = material.status === MaterialStatus.ACTIVE 
-      ? MaterialStatus.INACTIVE 
-      : MaterialStatus.ACTIVE;
+    material.status =
+      material.status === MaterialStatus.ACTIVE
+        ? MaterialStatus.INACTIVE
+        : MaterialStatus.ACTIVE;
 
     return await this.materialRepository.save(material);
   }

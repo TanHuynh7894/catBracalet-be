@@ -156,7 +156,9 @@ export class OrdersService {
       });
 
       this.notificationsGateway.sendNotificationToAll(newNotif);
-      console.log(`[DEBUG] Đã bắn thông báo cho đơn hàng ${checkoutResult.order.id}`);
+      console.log(
+        `[DEBUG] Đã bắn thông báo cho đơn hàng ${checkoutResult.order.id}`,
+      );
     } catch (error) {
       // Bọc try-catch cẩn thận, lỡ thông báo lỗi thì khách vẫn nhận được link thanh toán
       console.error('[ERROR] Lỗi nổ thông báo checkout:', error);
@@ -575,7 +577,10 @@ export class OrdersService {
 
     if (voucher.discountType === 'FIXED') {
       const discountValue = Number(voucher.discountValue ?? 0);
-      return Math.max(0, Math.round(totalAmount + discountValue - productSubtotal));
+      return Math.max(
+        0,
+        Math.round(totalAmount + discountValue - productSubtotal),
+      );
     }
 
     if (voucher.discountType === 'PERCENT') {
@@ -584,7 +589,10 @@ export class OrdersService {
 
       if (payableRate <= 0) return 0;
 
-      return Math.max(0, Math.round(totalAmount / payableRate - productSubtotal));
+      return Math.max(
+        0,
+        Math.round(totalAmount / payableRate - productSubtotal),
+      );
     }
 
     return Math.max(0, Math.round(totalAmount - productSubtotal));

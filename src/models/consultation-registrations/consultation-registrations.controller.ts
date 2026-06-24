@@ -7,7 +7,13 @@ import {
   Delete,
   ParseUUIDPipe,
 } from '@nestjs/common';
-import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags, ApiParam } from '@nestjs/swagger';
+import {
+  ApiCreatedResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiParam,
+} from '@nestjs/swagger';
 
 import { ConsultationRegistrationsService } from './consultation-registrations.service';
 import { CreateConsultationRegistrationDto } from './dto/create-consultation-registration.dto';
@@ -16,7 +22,9 @@ import { ConsultationRegistration } from './entities/consultation-registration.e
 @ApiTags('Consultation Registrations (Đăng ký tư vấn)')
 @Controller('consultation-registrations')
 export class ConsultationRegistrationsController {
-  constructor(private readonly registrationsService: ConsultationRegistrationsService) {}
+  constructor(
+    private readonly registrationsService: ConsultationRegistrationsService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Tạo form đăng ký tư vấn mới' })

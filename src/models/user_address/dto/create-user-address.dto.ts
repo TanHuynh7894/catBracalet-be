@@ -20,8 +20,7 @@ export class CreateUserAddressDto {
 
   @ApiProperty({
     example: '700000',
-    description:
-      'Goship province/city id from GET /user-address/provinces',
+    description: 'Goship province/city id from GET /user-address/provinces',
   })
   @IsString()
   @MaxLength(100)

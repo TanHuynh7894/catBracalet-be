@@ -21,7 +21,7 @@ export class ProductImagesService {
     private readonly configService: ConfigService,
     @InjectRepository(ProductImage)
     private readonly productImageRepository: Repository<ProductImage>,
-  ) { }
+  ) {}
 
   async create(
     createProductImageDto: CreateProductImageDto,
@@ -116,12 +116,14 @@ export class ProductImagesService {
   async softDelete(id: string): Promise<ProductImage> {
     const productImage = await this.findOneEntity(id);
 
-    productImage.status = productImage.status === ProductImageStatus.INACTIVE
-      ? ProductImageStatus.ACTIVE
-      : ProductImageStatus.INACTIVE;
+    productImage.status =
+      productImage.status === ProductImageStatus.INACTIVE
+        ? ProductImageStatus.ACTIVE
+        : ProductImageStatus.INACTIVE;
 
     // 3. Lưu vào database
-    const updatedProductImage = await this.productImageRepository.save(productImage);
+    const updatedProductImage =
+      await this.productImageRepository.save(productImage);
 
     return this.toPublicImageUrl(updatedProductImage);
   }

@@ -17,7 +17,9 @@ export class TicketMessagesService {
     private readonly notificationsGateway: NotificationsGateway,
   ) {}
 
-  async saveMessage(data: CreateTicketMessageDto): Promise<TicketMessageEntity> {
+  async saveMessage(
+    data: CreateTicketMessageDto,
+  ): Promise<TicketMessageEntity> {
     console.log('[DEBUG SERVICE] Dữ liệu truyền xuống:', data);
 
     const newMessage = this.messageRepository.create(data);
@@ -26,14 +28,17 @@ export class TicketMessagesService {
     try {
       const newNotif = await this.notificationsService.createNotification({
         title: 'Tin nhắn hỗ trợ mới!',
-        message: `Có tin nhắn mới trong Ticket #${savedMessage.ticket_id}`, 
+        message: `Có tin nhắn mới trong Ticket #${savedMessage.ticket_id}`,
         type: 'MESSAGE',
-        relatedId: savedMessage.ticket_id.toString(), 
+        relatedId: savedMessage.ticket_id.toString(),
       });
 
       this.notificationsGateway.sendNotificationToAll(newNotif);
-      
-      console.log('[DEBUG SERVICE] Đã bắn thông báo thành công cho Ticket:', savedMessage.ticket_id);
+
+      console.log(
+        '[DEBUG SERVICE] Đã bắn thông báo thành công cho Ticket:',
+        savedMessage.ticket_id,
+      );
     } catch (error) {
       console.error('[ERROR] Lỗi khi tạo hoặc bắn thông báo:', error);
     }
@@ -41,7 +46,9 @@ export class TicketMessagesService {
     return savedMessage;
   }
 
-  async getMessagesByTicketId(ticketId: string): Promise<TicketMessageEntity[]> {
+  async getMessagesByTicketId(
+    ticketId: string,
+  ): Promise<TicketMessageEntity[]> {
     return await this.messageRepository.find({
       where: { ticket_id: ticketId },
       order: { created_at: 'ASC' },

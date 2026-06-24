@@ -6,7 +6,7 @@ import {
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { isAxiosError } from 'axios';
+import axios, { isAxiosError } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import { Repository } from 'typeorm';
 import * as fs from 'fs';
@@ -16,10 +16,12 @@ import { Order } from '../orders/entities/order.entity';
 import { UserAddress } from '../user_address/entities/user_address.entity';
 import { VipService } from '../VIP/vip.service';
 import { Shipment } from './entities/shipment.entity';
+import { ShopLocation } from '../shop-location/entities/shop-location.entity';
 import { AdminCreateShipmentDto } from './dto/admin-create-shipment.dto';
 import { CalculateAddressFeeDto } from './dto/calculate-address-fee.dto';
 import { CalculateFeeDto } from './dto/calculate-fee.dto';
 import { CalculateOrderRatesDto } from './dto/calculate-order-rates.dto';
+import { ListShopOptionsDto } from './dto/list-shop-options.dto';
 import { GoshipWebhookDto } from './dto/goship-webhook.dto';
 
 export interface GoshipProvince {
@@ -73,6 +75,28 @@ export interface NormalizedGoshipRate {
   total_amount: number;
 }
 
+export interface ResolvedAddressDetails {
+  city: string;
+  cityName: string;
+  district: string;
+  districtName: string;
+  ward: string;
+  wardName: string;
+}
+
+export interface Coordinates {
+  latitude: number;
+  longitude: number;
+}
+
+interface ShopOptionSelection {
+  shopLocation: ShopLocation;
+  destination: ResolvedAddressDetails;
+  destinationCoordinates: Coordinates;
+  distanceKm: number;
+  recommended: boolean;
+}
+
 @Injectable()
 export class ShipmentService {
   private provinces: GoshipProvince[] = [];
@@ -86,6 +110,8 @@ export class ShipmentService {
     private readonly orderRepository: Repository<Order>,
     @InjectRepository(UserAddress)
     private readonly userAddressRepository: Repository<UserAddress>,
+    @InjectRepository(ShopLocation)
+    private readonly shopLocationRepository: Repository<ShopLocation>,
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
     private readonly vipService: VipService,
@@ -239,8 +265,8 @@ export class ShipmentService {
     return this.wards.filter((ward) => ward.district_id === code);
   }
 
-  async calculateFeeForClient(dto: CalculateFeeDto) {
-    const adminRates = await this.calculateFeeForAdmin(dto);
+  async calculateFeeForClient(dto: CalculateFeeDto, shopLocationId?: string) {
+    const adminRates = await this.calculateFeeForAdmin(dto, shopLocationId);
 
     if (!adminRates.length) {
       throw new BadRequestException(
@@ -276,36 +302,74 @@ export class ShipmentService {
       );
     }
 
-    return this.calculateFeeForAddress(address);
+    return this.calculateFeeForAddress(address, {}, dto.shopLocationId);
+  }
+
+  async listShopOptionsForAddress(dto: ListShopOptionsDto) {
+    const address = await this.userAddressRepository.findOne({
+      where: { id: dto.addressId, status: 'ACTIVE' },
+    });
+
+    if (!address) {
+      throw new NotFoundException(
+        `Active address with id ${dto.addressId} not found`,
+      );
+    }
+
+    return this.listShopOptionsForAddressEntity(address);
+  }
+
+  async listShopOptionsForOrder(orderId: string) {
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId },
+      relations: ['address'],
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with id ${orderId} not found`);
+    }
+
+    if (!order.address) {
+      throw new BadRequestException('Order does not have a shipping address');
+    }
+
+    return this.listShopOptionsForAddressEntity(order.address);
   }
 
   async calculateFeeForAddress(
-    address: Pick<UserAddress, 'province' | 'district' | 'ward'>,
+    address: Pick<UserAddress, 'province' | 'district' | 'ward'> &
+      Partial<Pick<UserAddress, 'detailAddress'>>,
     parcel: Omit<CalculateFeeDto, 'city' | 'district' | 'ward'> = {},
+    shopLocationId?: string,
   ) {
-    const destinationAddress = await this.resolveAddressCodes(
+    const destinationAddress = await this.resolveAddressDetails(
       address.province,
       address.district,
       address.ward,
     );
+    const fee = await this.calculateFeeForClient(
+      {
+        ...parcel,
+        city: destinationAddress.city,
+        district: destinationAddress.district,
+        ward: destinationAddress.ward,
+      },
+      shopLocationId,
+    );
 
-    return this.calculateFeeForClient({
-      ...parcel,
-      city: destinationAddress.city,
-      district: destinationAddress.district,
-      ward: destinationAddress.ward,
-    });
+    return {
+      ...fee,
+      origin: await this.getSenderAddressSummary(shopLocationId),
+    };
   }
 
-  async calculateFeeForAdmin(dto: CalculateFeeDto) {
+  async calculateFeeForAdmin(dto: CalculateFeeDto, shopLocationId?: string) {
     await this.validateDestinationCodes(dto.city, dto.district, dto.ward);
+    const senderAddress = await this.getSenderRateAddress(shopLocationId);
 
     const payload = {
       shipment: {
-        address_from: {
-          city: this.getSenderCity(),
-          district: this.getSenderDistrict(),
-        },
+        address_from: senderAddress,
         address_to: {
           city: dto.city,
           district: dto.district,
@@ -324,19 +388,21 @@ export class ShipmentService {
     const response = await this.postToGoship('/rates', payload);
     const rates = this.extractGoshipData<GoshipRateResponse[]>(response, []);
 
-    return rates.map((rate): NormalizedGoshipRate => ({
-      id: rate.id,
-      carrier_name: rate.carrier_name,
-      carrier_code: rate.carrier_code ?? null,
-      carrier_short_name: rate.carrier_short_name ?? null,
-      carrier_logo: rate.carrier_logo,
-      service: rate.service_name ?? rate.service ?? null,
-      service_code: rate.service_code ?? null,
-      expected: rate.expected_txt ?? rate.expected ?? null,
-      cod_fee: Number(rate.cod_fee ?? 0),
-      total_fee: Number(rate.total_fee ?? 0),
-      total_amount: Number(rate.total_amount ?? rate.total_fee ?? 0),
-    }));
+    return rates.map(
+      (rate): NormalizedGoshipRate => ({
+        id: rate.id,
+        carrier_name: rate.carrier_name,
+        carrier_code: rate.carrier_code ?? null,
+        carrier_short_name: rate.carrier_short_name ?? null,
+        carrier_logo: rate.carrier_logo,
+        service: rate.service_name ?? rate.service ?? null,
+        service_code: rate.service_code ?? null,
+        expected: rate.expected_txt ?? rate.expected ?? null,
+        cod_fee: Number(rate.cod_fee ?? 0),
+        total_fee: Number(rate.total_fee ?? 0),
+        total_amount: Number(rate.total_amount ?? rate.total_fee ?? 0),
+      }),
+    );
   }
 
   async calculateRatesForOrder(orderId: string, dto: CalculateOrderRatesDto) {
@@ -359,26 +425,34 @@ export class ShipmentService {
       throw new BadRequestException('Order does not have a shipping address');
     }
 
-    const destinationAddress = await this.resolveAddressCodes(
+    const destinationAddress = await this.resolveAddressDetails(
       order.address.province,
       order.address.district,
       order.address.ward,
     );
 
     const declaredAmount = this.getOrderDeclaredAmount(order);
-    const rates = await this.calculateFeeForAdmin({
-      ...dto,
-      amount: declaredAmount,
-      city: destinationAddress.city,
-      district: destinationAddress.district,
-      ward: destinationAddress.ward,
-    });
+    const rates = await this.calculateFeeForAdmin(
+      {
+        weight: dto.weight,
+        width: dto.width,
+        height: dto.height,
+        length: dto.length,
+        cod: dto.cod,
+        amount: declaredAmount,
+        city: destinationAddress.city,
+        district: destinationAddress.district,
+        ward: destinationAddress.ward,
+      },
+      dto.shopLocationId,
+    );
 
     return {
       orderId: order.id,
       status: order.status,
       declaredAmount,
       destination: destinationAddress,
+      origin: await this.getSenderAddressSummary(dto.shopLocationId),
       carriers: this.groupRatesByCarrier(rates),
       rates,
     };
@@ -454,20 +528,21 @@ export class ShipmentService {
       throw new BadRequestException('Order does not have a shipping address');
     }
 
-    const destinationAddress = await this.resolveAddressCodes(
+    const destinationAddress = await this.resolveAddressDetails(
       order.address.province,
       order.address.district,
       order.address.ward,
     );
 
     const declaredAmount = this.getOrderDeclaredAmount(order);
+    const senderAddress = await this.getSenderAddress(dto.shopLocationId);
     const payload = {
       shipment: {
         rate: dto.rateId,
         payer: dto.payer ?? 1,
         order_id: order.id,
         is_recall: 0,
-        address_from: this.getSenderAddress(),
+        address_from: senderAddress,
         address_to: {
           name: order.address.receiverName,
           phone: order.address.phone,
@@ -723,11 +798,11 @@ export class ShipmentService {
     }
   }
 
-  private async resolveAddressCodes(
+  async resolveAddressDetails(
     provinceValue: string,
     districtValue: string,
     wardValue: string,
-  ): Promise<{ city: string; district: string; ward: string }> {
+  ): Promise<ResolvedAddressDetails> {
     const provinces = await this.getProvinces();
     const city = this.findByIdOrName(provinces, provinceValue);
     if (!city) {
@@ -754,8 +829,11 @@ export class ShipmentService {
 
     return {
       city: city.id,
+      cityName: city.name,
       district: district.id,
+      districtName: district.name,
       ward: ward.id,
+      wardName: ward.name,
     };
   }
 
@@ -789,7 +867,168 @@ export class ShipmentService {
       .trim();
   }
 
-  private getSenderAddress() {
+  private async listShopOptionsForAddressEntity(
+    address: Pick<UserAddress, 'province' | 'district' | 'ward'> &
+      Partial<Pick<UserAddress, 'detailAddress'>>,
+  ) {
+    const activeShops = await this.shopLocationRepository.find({
+      where: { isActive: true },
+    });
+    const shopsWithCoordinates = activeShops.filter(
+      (shop) =>
+        Number.isFinite(Number(shop.shopLatitude)) &&
+        Number.isFinite(Number(shop.shopLongitude)),
+    );
+
+    if (!shopsWithCoordinates.length) {
+      throw new BadRequestException(
+        'No active shop locations with coordinates were found',
+      );
+    }
+
+    const destination = await this.resolveAddressDetails(
+      address.province,
+      address.district,
+      address.ward,
+    );
+    const destinationCoordinates = await this.geocodeUserAddress(
+      address,
+      destination,
+    );
+    const options = shopsWithCoordinates
+      .map((shopLocation) => ({
+        shopLocation,
+        destination,
+        destinationCoordinates,
+        distanceKm: this.calculateDistanceKm(
+          {
+            latitude: Number(shopLocation.shopLatitude),
+            longitude: Number(shopLocation.shopLongitude),
+          },
+          destinationCoordinates,
+        ),
+        recommended: false,
+      }))
+      .sort((left, right) => left.distanceKm - right.distanceKm);
+
+    if (options[0]) {
+      options[0].recommended = true;
+    }
+
+    return {
+      destination,
+      destinationCoordinates,
+      options: options.map((option) => this.formatShopOptionSelection(option)),
+    };
+  }
+
+  private async geocodeUserAddress(
+    address: Partial<Pick<UserAddress, 'detailAddress'>>,
+    details: ResolvedAddressDetails,
+  ): Promise<Coordinates> {
+    const candidates = [
+      [
+        address.detailAddress,
+        details.wardName,
+        details.districtName,
+        details.cityName,
+        'Viet Nam',
+      ],
+      [details.wardName, details.districtName, details.cityName, 'Viet Nam'],
+      [details.districtName, details.cityName, 'Viet Nam'],
+      [details.cityName, 'Viet Nam'],
+    ]
+      .map((parts) => parts.filter(Boolean).join(', '))
+      .filter(Boolean);
+
+    for (const candidate of [...new Set(candidates)]) {
+      const response = await axios.get(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(candidate)}&format=json&limit=1`,
+        {
+          headers: {
+            'User-Agent': 'CatBraceletBE/1.0 (shipment-shop-options)',
+            Referer: 'http://localhost:3000',
+          },
+          timeout: 5000,
+        },
+      );
+
+      if (!Array.isArray(response.data) || response.data.length === 0) {
+        continue;
+      }
+
+      const result = response.data[0];
+      const latitude = Number(result.lat);
+      const longitude = Number(result.lon);
+
+      if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+        return { latitude, longitude };
+      }
+    }
+
+    throw new BadRequestException(
+      'Cannot find destination coordinates for shop option listing',
+    );
+  }
+
+  private calculateDistanceKm(from: Coordinates, to: Coordinates): number {
+    const earthRadiusKm = 6371;
+    const latDelta = this.toRadians(to.latitude - from.latitude);
+    const lonDelta = this.toRadians(to.longitude - from.longitude);
+    const fromLat = this.toRadians(from.latitude);
+    const toLat = this.toRadians(to.latitude);
+    const haversine =
+      Math.sin(latDelta / 2) ** 2 +
+      Math.cos(fromLat) * Math.cos(toLat) * Math.sin(lonDelta / 2) ** 2;
+
+    return Number(
+      (
+        2 *
+        earthRadiusKm *
+        Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine))
+      ).toFixed(2),
+    );
+  }
+
+  private toRadians(value: number): number {
+    return (value * Math.PI) / 180;
+  }
+
+  private formatShopOptionSelection(selection: ShopOptionSelection) {
+    return {
+      shopLocation: {
+        id: selection.shopLocation.id,
+        shopName: selection.shopLocation.shopName,
+        shopAddress: selection.shopLocation.shopAddress,
+        province: selection.shopLocation.province,
+        district: selection.shopLocation.district,
+        ward: selection.shopLocation.ward,
+        detailAddress: selection.shopLocation.detailAddress,
+        phoneNumber: selection.shopLocation.phoneNumber,
+        workingHours: selection.shopLocation.workingHours,
+        shopLatitude: selection.shopLocation.shopLatitude,
+        shopLongitude: selection.shopLocation.shopLongitude,
+        isActive: selection.shopLocation.isActive,
+      },
+      distanceKm: selection.distanceKm,
+      recommended: selection.recommended,
+    };
+  }
+
+  private async getSenderAddress(shopLocationId?: string) {
+    const shopLocation = await this.getActiveShopLocation(shopLocationId);
+
+    if (shopLocation) {
+      return {
+        name: shopLocation.shopName,
+        phone: shopLocation.phoneNumber,
+        street: shopLocation.detailAddress,
+        ward: shopLocation.ward,
+        district: shopLocation.district,
+        city: shopLocation.province,
+      };
+    }
+
     return {
       name: this.getRequiredConfig('GOSHIP_SENDER_NAME'),
       phone: this.getRequiredConfig('GOSHIP_SENDER_PHONE'),
@@ -798,6 +1037,64 @@ export class ShipmentService {
       district: this.getSenderDistrict(),
       city: this.getSenderCity(),
     };
+  }
+
+  private async getSenderRateAddress(shopLocationId?: string) {
+    const shopLocation = await this.getActiveShopLocation(shopLocationId);
+
+    if (shopLocation) {
+      return {
+        city: shopLocation.province,
+        district: shopLocation.district,
+      };
+    }
+
+    return {
+      city: this.getSenderCity(),
+      district: this.getSenderDistrict(),
+    };
+  }
+
+  private async getSenderAddressSummary(shopLocationId?: string) {
+    const shopLocation = await this.getActiveShopLocation(shopLocationId);
+
+    if (shopLocation) {
+      return {
+        shopLocationId: shopLocation.id,
+        shopName: shopLocation.shopName,
+        city: shopLocation.province,
+        district: shopLocation.district,
+        ward: shopLocation.ward,
+        address: shopLocation.shopAddress,
+      };
+    }
+
+    return {
+      shopLocationId: null,
+      shopName: this.getRequiredConfig('GOSHIP_SENDER_NAME'),
+      city: this.getSenderCity(),
+      district: this.getSenderDistrict(),
+      ward: this.getSenderWard(),
+      address: this.getRequiredConfig('GOSHIP_SENDER_STREET'),
+    };
+  }
+
+  private async getActiveShopLocation(
+    shopLocationId?: string,
+  ): Promise<ShopLocation | null> {
+    if (!shopLocationId) return null;
+
+    const shopLocation = await this.shopLocationRepository.findOne({
+      where: { id: shopLocationId, isActive: true },
+    });
+
+    if (!shopLocation) {
+      throw new BadRequestException(
+        `Active shop location with id ${shopLocationId} not found`,
+      );
+    }
+
+    return shopLocation;
   }
 
   private getSenderCity(): string {

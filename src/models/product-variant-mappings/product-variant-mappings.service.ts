@@ -24,7 +24,7 @@ export class ProductVariantMappingsService {
     private readonly productRepository: Repository<Product>,
     @InjectRepository(ProductVariant)
     private readonly productVariantRepository: Repository<ProductVariant>,
-  ) { }
+  ) {}
 
   async create(
     createMappingDto: CreateProductVariantMappingDto,
@@ -118,9 +118,10 @@ export class ProductVariantMappingsService {
     const mapping = await this.findOne(productId, variantId);
 
     // 2. Kiểm tra trạng thái để toggle giữa ACTIVE và INACTIVE
-    mapping.status = mapping.status === ProductVariantMappingStatus.INACTIVE
-      ? ProductVariantMappingStatus.ACTIVE
-      : ProductVariantMappingStatus.INACTIVE;
+    mapping.status =
+      mapping.status === ProductVariantMappingStatus.INACTIVE
+        ? ProductVariantMappingStatus.ACTIVE
+        : ProductVariantMappingStatus.INACTIVE;
 
     // 3. Lưu thay đổi
     await this.mappingRepository.save(mapping);
