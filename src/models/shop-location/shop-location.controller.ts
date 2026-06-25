@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
 } from '@nestjs/common';
 import {
   ApiCreatedResponse,
@@ -15,6 +16,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CreateShopLocationDto } from './dto/create-shop-location.dto';
+import { UpdateShopInventoryDto } from './dto/update-shop-inventory.dto';
 import { UpdateShopLocationDto } from './dto/update-shop-location.dto';
 import { ShopLocation } from './entities/shop-location.entity';
 import { ShopLocationService } from './shop-location.service';
@@ -84,6 +86,25 @@ export class ShopLocationController {
   @ApiOkResponse({ type: ShopLocation })
   findOne(@Param('id') id: string) {
     return this.shopLocationService.findOne(id);
+  }
+
+  @Get(':id/inventory')
+  @ApiOperation({ summary: 'Get inventory for a shop location' })
+  @ApiParam({ name: 'id', description: 'Shop location UUID' })
+  getInventory(@Param('id') id: string) {
+    return this.shopLocationService.getInventory(id);
+  }
+
+  @Put(':id/inventory/:variantId')
+  @ApiOperation({ summary: 'Set variant inventory for a shop location' })
+  @ApiParam({ name: 'id', description: 'Shop location UUID' })
+  @ApiParam({ name: 'variantId', description: 'Product variant UUID' })
+  setInventory(
+    @Param('id') id: string,
+    @Param('variantId') variantId: string,
+    @Body() dto: UpdateShopInventoryDto,
+  ) {
+    return this.shopLocationService.setInventory(id, variantId, dto);
   }
 
   @Patch(':id')

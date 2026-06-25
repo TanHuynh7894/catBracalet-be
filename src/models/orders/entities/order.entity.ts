@@ -10,6 +10,7 @@ import { OrderItem } from './order-item.entity';
 import { User } from '../../user/entities/user.entity';
 import { UserAddress } from '../../user_address/entities/user_address.entity';
 import { Vouchers } from '../../vouchers/entities/vouchers.entity';
+import { ShopLocation } from '../../shop-location/entities/shop-location.entity';
 
 @Entity('orders')
 export class Order {
@@ -36,6 +37,13 @@ export class Order {
   @ManyToOne(() => Vouchers)
   @JoinColumn({ name: 'voucher_id' })
   voucher: Vouchers;
+
+  @Column('uuid', { name: 'shipping_origin_shop_id', nullable: true })
+  shippingOriginShopId: string | null;
+
+  @ManyToOne(() => ShopLocation)
+  @JoinColumn({ name: 'shipping_origin_shop_id' })
+  shippingOriginShop: ShopLocation | null;
 
   @Column('decimal', { name: 'total_amount', precision: 15, scale: 2 })
   totalAmount: number;

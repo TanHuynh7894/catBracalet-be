@@ -74,6 +74,7 @@ export class OrdersService {
           totalAmount,
           subtotal,
           shippingFee,
+          shippingOriginShopId,
           discountAmount,
           orderItems,
         } = await this.calculateOrderTotal(cartItems, address, voucher);
@@ -84,6 +85,7 @@ export class OrdersService {
           userId,
           addressId,
           voucher?.id,
+          shippingOriginShopId,
           totalAmount,
         );
 
@@ -104,6 +106,14 @@ export class OrdersService {
 
         // 6. Deduct Stock from product variants
         await this.orderItemsService.deductStock(cartItems, manager);
+        await this.shipmentService.deductShopInventory(
+          shippingOriginShopId,
+          cartItems.map((item) => ({
+            variantId: item.variantId,
+            quantity: item.quantity,
+          })),
+          manager,
+        );
 
         // 7. Clear Cart Items
         await this.clearCart(
@@ -118,6 +128,7 @@ export class OrdersService {
             'user',
             'address',
             'voucher',
+            'shippingOriginShop',
             'items',
             'items.variant',
             'items.variant.productVariantMappings',
@@ -130,6 +141,7 @@ export class OrdersService {
           pricing: {
             subtotal,
             shippingFee,
+            shippingOriginShopId,
             discountAmount,
             totalAmount,
           },
@@ -410,10 +422,19 @@ export class OrdersService {
   ) {
     const { items: orderItems, productSubtotal } =
       this.orderItemsService.prepareFromCartItems(cartItems);
+    const fulfillmentShop =
+      await this.shipmentService.selectFulfillmentShopForCheckout(
+        address,
+        cartItems.map((item) => ({
+          variantId: item.variantId,
+          quantity: item.quantity,
+        })),
+      );
 
     const shippingFee = await this.calculateCustomerShippingFee(
       address,
       productSubtotal,
+      fulfillmentShop.shopLocation.id,
     );
     const subtotal = productSubtotal;
     const totalBeforeDiscount = subtotal + shippingFee;
@@ -435,6 +456,7 @@ export class OrdersService {
       totalAmount,
       subtotal,
       shippingFee,
+      shippingOriginShopId: fulfillmentShop.shopLocation.id,
       discountAmount,
       orderItems,
     };
@@ -443,12 +465,14 @@ export class OrdersService {
   private async calculateCustomerShippingFee(
     address: UserAddress,
     productSubtotal: number,
+    shopLocationId: string,
   ): Promise<number> {
     const shippingFee = await this.shipmentService.calculateFeeForAddress(
       address,
       {
         amount: productSubtotal,
       },
+      shopLocationId,
     );
 
     return Number(shippingFee.total_shipping_fee);
@@ -462,12 +486,14 @@ export class OrdersService {
     userId: string,
     addressId: string,
     voucherId: string | undefined,
+    shippingOriginShopId: string | null | undefined,
     totalAmount: number,
   ) {
     const order = manager.create(Order, {
       userId,
       addressId,
       voucherId,
+      shippingOriginShopId: shippingOriginShopId ?? null,
       totalAmount,
       status: 'PENDING',
       createdAt: new Date(),
@@ -531,6 +557,7 @@ export class OrdersService {
       'user',
       'address',
       'voucher',
+      'shippingOriginShop',
       'items',
       'items.variant',
       'items.variant.productVariantMappings',

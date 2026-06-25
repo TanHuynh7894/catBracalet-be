@@ -6,9 +6,9 @@ import {
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import axios, { isAxiosError } from 'axios';
+import { isAxiosError } from 'axios';
 import { firstValueFrom } from 'rxjs';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -17,12 +17,16 @@ import { UserAddress } from '../user_address/entities/user_address.entity';
 import { VipService } from '../VIP/vip.service';
 import { Shipment } from './entities/shipment.entity';
 import { ShopLocation } from '../shop-location/entities/shop-location.entity';
+import { ShopInventory } from '../shop-location/entities/shop-inventory.entity';
+import { Cart } from '../carts/entities/cart.entity';
+import { CartItem } from '../cart_items/entities/cart-item.entity';
+import { OrderItemsService } from '../order-items/order-items.service';
 import { AdminCreateShipmentDto } from './dto/admin-create-shipment.dto';
 import { CalculateAddressFeeDto } from './dto/calculate-address-fee.dto';
 import { CalculateFeeDto } from './dto/calculate-fee.dto';
 import { CalculateOrderRatesDto } from './dto/calculate-order-rates.dto';
-import { ListShopOptionsDto } from './dto/list-shop-options.dto';
 import { GoshipWebhookDto } from './dto/goship-webhook.dto';
+import { geocodeWithNominatim } from '../../helpers/nominatim-geocoding.helper';
 
 export interface GoshipProvince {
   id: string;
@@ -89,12 +93,15 @@ export interface Coordinates {
   longitude: number;
 }
 
-interface ShopOptionSelection {
+export interface FulfillmentItem {
+  variantId: string;
+  quantity: number;
+}
+
+export interface SelectedFulfillmentShop {
   shopLocation: ShopLocation;
-  destination: ResolvedAddressDetails;
-  destinationCoordinates: Coordinates;
   distanceKm: number;
-  recommended: boolean;
+  inventoryEnforced: boolean;
 }
 
 @Injectable()
@@ -112,9 +119,16 @@ export class ShipmentService {
     private readonly userAddressRepository: Repository<UserAddress>,
     @InjectRepository(ShopLocation)
     private readonly shopLocationRepository: Repository<ShopLocation>,
+    @InjectRepository(ShopInventory)
+    private readonly shopInventoryRepository: Repository<ShopInventory>,
+    @InjectRepository(Cart)
+    private readonly cartRepository: Repository<Cart>,
+    @InjectRepository(CartItem)
+    private readonly cartItemRepository: Repository<CartItem>,
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
     private readonly vipService: VipService,
+    private readonly orderItemsService: OrderItemsService,
   ) {
     this.loadLocalData();
   }
@@ -275,14 +289,16 @@ export class ShipmentService {
     }
 
     const totalFees = adminRates.map((rate) => Number(rate.total_fee));
+    const lowestFee = Math.min(...totalFees);
     const averageFee =
       totalFees.reduce((sum, fee) => sum + fee, 0) / totalFees.length;
     const highestFee = Math.max(...totalFees);
-    const markupFee = highestFee * 0.1;
-    const customerShippingFee = Math.round(averageFee + markupFee);
+    const markupFee = lowestFee * 0.1;
+    const customerShippingFee = Math.round(lowestFee + markupFee);
 
     return {
       rate_count: adminRates.length,
+      lowest_shipping_fee: lowestFee,
       average_shipping_fee: Math.round(averageFee),
       highest_shipping_fee: highestFee,
       markup_fee: Math.round(markupFee),
@@ -302,38 +318,163 @@ export class ShipmentService {
       );
     }
 
-    return this.calculateFeeForAddress(address, {}, dto.shopLocationId);
-  }
-
-  async listShopOptionsForAddress(dto: ListShopOptionsDto) {
-    const address = await this.userAddressRepository.findOne({
-      where: { id: dto.addressId, status: 'ACTIVE' },
-    });
-
-    if (!address) {
-      throw new NotFoundException(
-        `Active address with id ${dto.addressId} not found`,
+    if (dto.userId && address.userId !== dto.userId) {
+      throw new BadRequestException(
+        'Selected address does not belong to this user',
       );
     }
 
-    return this.listShopOptionsForAddressEntity(address);
+    if (!dto.userId) {
+      return this.calculateFeeForAddress(address);
+    }
+
+    const cartItems = await this.getCartItemsForShippingEstimate(
+      dto.userId,
+      dto.cartItemIds,
+    );
+    const { productSubtotal } =
+      this.orderItemsService.prepareFromCartItems(cartItems);
+    const fulfillmentShop = await this.selectFulfillmentShopForCheckout(
+      address,
+      cartItems.map((item) => ({
+        variantId: item.variantId,
+        quantity: item.quantity,
+      })),
+    );
+    const fee = await this.calculateFeeForAddress(
+      address,
+      { amount: productSubtotal },
+      fulfillmentShop.shopLocation.id,
+    );
+
+    return {
+      ...fee,
+      selectedShopDistanceKm: fulfillmentShop.distanceKm,
+      inventoryEnforced: fulfillmentShop.inventoryEnforced,
+    };
   }
 
-  async listShopOptionsForOrder(orderId: string) {
-    const order = await this.orderRepository.findOne({
-      where: { id: orderId },
-      relations: ['address'],
+  private async getCartItemsForShippingEstimate(
+    userId: string,
+    cartItemIds?: string[],
+  ): Promise<CartItem[]> {
+    const cart = await this.cartRepository.findOne({ where: { userId } });
+    if (!cart) {
+      throw new NotFoundException('Cart was not found for this user');
+    }
+
+    const allCartItems = await this.cartItemRepository.find({
+      where: { cartId: cart.id },
+      relations: [
+        'variant',
+        'variant.productVariantMappings',
+        'variant.productVariantMappings.product',
+      ],
     });
+    const selectedCartItemIds = new Set(cartItemIds ?? []);
+    const cartItems = selectedCartItemIds.size
+      ? allCartItems.filter((item) => selectedCartItemIds.has(item.id))
+      : allCartItems;
 
-    if (!order) {
-      throw new NotFoundException(`Order with id ${orderId} not found`);
+    if (
+      selectedCartItemIds.size &&
+      cartItems.length !== selectedCartItemIds.size
+    ) {
+      throw new BadRequestException(
+        'One or more selected cart items were not found in this cart',
+      );
     }
 
-    if (!order.address) {
-      throw new BadRequestException('Order does not have a shipping address');
+    if (!cartItems.length) {
+      throw new BadRequestException('Cart is empty');
     }
 
-    return this.listShopOptionsForAddressEntity(order.address);
+    return cartItems;
+  }
+
+  async selectFulfillmentShopForCheckout(
+    address: Pick<UserAddress, 'province' | 'district' | 'ward'> &
+      Partial<Pick<UserAddress, 'detailAddress'>>,
+    items: FulfillmentItem[],
+  ): Promise<SelectedFulfillmentShop> {
+    const activeShops = await this.getActiveShopsWithCoordinates();
+    const destination = await this.resolveAddressDetails(
+      address.province,
+      address.district,
+      address.ward,
+    );
+    const destinationCoordinates = await this.geocodeUserAddress(
+      address,
+      destination,
+    );
+    const sortedShops = activeShops
+      .map((shopLocation) => ({
+        shopLocation,
+        distanceKm: this.calculateDistanceKm(
+          {
+            latitude: Number(shopLocation.shopLatitude),
+            longitude: Number(shopLocation.shopLongitude),
+          },
+          destinationCoordinates,
+        ),
+      }))
+      .sort((left, right) => left.distanceKm - right.distanceKm);
+
+    const inventoryEnforced = await this.isShopInventoryConfigured(items);
+
+    if (!inventoryEnforced) {
+      const nearestShop = sortedShops[0];
+      if (!nearestShop) {
+        throw new BadRequestException('No active shop locations were found');
+      }
+
+      return { ...nearestShop, inventoryEnforced: false };
+    }
+
+    for (const shop of sortedShops) {
+      if (await this.canShopFulfillItems(shop.shopLocation.id, items)) {
+        return { ...shop, inventoryEnforced: true };
+      }
+    }
+
+    throw new BadRequestException(
+      'No active shop location has enough inventory for this checkout',
+    );
+  }
+
+  async deductShopInventory(
+    shopLocationId: string | null | undefined,
+    items: FulfillmentItem[],
+    manager?: EntityManager,
+  ): Promise<void> {
+    if (!shopLocationId) return;
+
+    const inventoryRepository = manager
+      ? manager.getRepository(ShopInventory)
+      : this.shopInventoryRepository;
+    const inventoryConfigured = await this.isShopInventoryConfigured(
+      items,
+      manager,
+    );
+
+    if (!inventoryConfigured) return;
+
+    for (const item of items) {
+      const result = await inventoryRepository
+        .createQueryBuilder()
+        .update(ShopInventory)
+        .set({ stockQuantity: () => `stock_quantity - ${item.quantity}` })
+        .where('shop_location_id = :shopLocationId', { shopLocationId })
+        .andWhere('variant_id = :variantId', { variantId: item.variantId })
+        .andWhere('stock_quantity >= :quantity', { quantity: item.quantity })
+        .execute();
+
+      if (!result.affected) {
+        throw new BadRequestException(
+          `Shop location ${shopLocationId} does not have enough inventory for variant ${item.variantId}`,
+        );
+      }
+    }
   }
 
   async calculateFeeForAddress(
@@ -373,6 +514,7 @@ export class ShipmentService {
         address_to: {
           city: dto.city,
           district: dto.district,
+          ward: dto.ward,
         },
         parcel: {
           cod: dto.cod ?? 0,
@@ -432,6 +574,7 @@ export class ShipmentService {
     );
 
     const declaredAmount = this.getOrderDeclaredAmount(order);
+    const selectedShopLocationId = this.getOrderShippingOriginShopId(order);
     const rates = await this.calculateFeeForAdmin(
       {
         weight: dto.weight,
@@ -444,7 +587,7 @@ export class ShipmentService {
         district: destinationAddress.district,
         ward: destinationAddress.ward,
       },
-      dto.shopLocationId,
+      selectedShopLocationId,
     );
 
     return {
@@ -452,7 +595,7 @@ export class ShipmentService {
       status: order.status,
       declaredAmount,
       destination: destinationAddress,
-      origin: await this.getSenderAddressSummary(dto.shopLocationId),
+      origin: await this.getSenderAddressSummary(selectedShopLocationId),
       carriers: this.groupRatesByCarrier(rates),
       rates,
     };
@@ -535,7 +678,8 @@ export class ShipmentService {
     );
 
     const declaredAmount = this.getOrderDeclaredAmount(order);
-    const senderAddress = await this.getSenderAddress(dto.shopLocationId);
+    const selectedShopLocationId = this.getOrderShippingOriginShopId(order);
+    const senderAddress = await this.getSenderAddress(selectedShopLocationId);
     const payload = {
       shipment: {
         rate: dto.rateId,
@@ -635,6 +779,18 @@ export class ShipmentService {
     return itemsAmount > 0
       ? itemsAmount
       : Math.round(Number(order.totalAmount ?? 0));
+  }
+
+  private getOrderShippingOriginShopId(
+    order: Pick<Order, 'id' | 'shippingOriginShopId'>,
+  ): string {
+    if (!order.shippingOriginShopId) {
+      throw new BadRequestException(
+        `Order ${order.id} does not have a checkout shipping origin shop. Please recreate shipping calculation through checkout before creating shipment.`,
+      );
+    }
+
+    return order.shippingOriginShopId;
   }
 
   async trackShipment(orderId: string) {
@@ -867,10 +1023,7 @@ export class ShipmentService {
       .trim();
   }
 
-  private async listShopOptionsForAddressEntity(
-    address: Pick<UserAddress, 'province' | 'district' | 'ward'> &
-      Partial<Pick<UserAddress, 'detailAddress'>>,
-  ) {
+  private async getActiveShopsWithCoordinates(): Promise<ShopLocation[]> {
     const activeShops = await this.shopLocationRepository.find({
       where: { isActive: true },
     });
@@ -886,40 +1039,50 @@ export class ShipmentService {
       );
     }
 
-    const destination = await this.resolveAddressDetails(
-      address.province,
-      address.district,
-      address.ward,
-    );
-    const destinationCoordinates = await this.geocodeUserAddress(
-      address,
-      destination,
-    );
-    const options = shopsWithCoordinates
-      .map((shopLocation) => ({
-        shopLocation,
-        destination,
-        destinationCoordinates,
-        distanceKm: this.calculateDistanceKm(
-          {
-            latitude: Number(shopLocation.shopLatitude),
-            longitude: Number(shopLocation.shopLongitude),
-          },
-          destinationCoordinates,
-        ),
-        recommended: false,
-      }))
-      .sort((left, right) => left.distanceKm - right.distanceKm);
+    return shopsWithCoordinates;
+  }
 
-    if (options[0]) {
-      options[0].recommended = true;
-    }
+  private async isShopInventoryConfigured(
+    items: FulfillmentItem[],
+    manager?: EntityManager,
+  ): Promise<boolean> {
+    const variantIds = items.map((item) => item.variantId);
+    if (!variantIds.length) return false;
 
-    return {
-      destination,
-      destinationCoordinates,
-      options: options.map((option) => this.formatShopOptionSelection(option)),
-    };
+    const inventoryRepository = manager
+      ? manager.getRepository(ShopInventory)
+      : this.shopInventoryRepository;
+    const count = await inventoryRepository
+      .createQueryBuilder('inventory')
+      .where('inventory.variant_id IN (:...variantIds)', { variantIds })
+      .getCount();
+
+    return count > 0;
+  }
+
+  private async canShopFulfillItems(
+    shopLocationId: string,
+    items: FulfillmentItem[],
+  ): Promise<boolean> {
+    const inventories = await this.shopInventoryRepository
+      .createQueryBuilder('inventory')
+      .where('inventory.shop_location_id = :shopLocationId', {
+        shopLocationId,
+      })
+      .andWhere('inventory.variant_id IN (:...variantIds)', {
+        variantIds: items.map((item) => item.variantId),
+      })
+      .getMany();
+    const stockByVariantId = new Map(
+      inventories.map((inventory) => [
+        inventory.variantId,
+        inventory.stockQuantity,
+      ]),
+    );
+
+    return items.every(
+      (item) => (stockByVariantId.get(item.variantId) ?? 0) >= item.quantity,
+    );
   }
 
   private async geocodeUserAddress(
@@ -942,32 +1105,19 @@ export class ShipmentService {
       .filter(Boolean);
 
     for (const candidate of [...new Set(candidates)]) {
-      const response = await axios.get(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(candidate)}&format=json&limit=1`,
-        {
-          headers: {
-            'User-Agent': 'CatBraceletBE/1.0 (shipment-shop-options)',
-            Referer: 'http://localhost:3000',
-          },
-          timeout: 5000,
-        },
-      );
+      const coordinates = await geocodeWithNominatim(candidate, {
+        userAgent: 'CatBraceletBE/1.0 (shipment-checkout-origin)',
+        referer: 'http://localhost:3000',
+        timeout: 5000,
+      });
 
-      if (!Array.isArray(response.data) || response.data.length === 0) {
-        continue;
-      }
-
-      const result = response.data[0];
-      const latitude = Number(result.lat);
-      const longitude = Number(result.lon);
-
-      if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
-        return { latitude, longitude };
+      if (coordinates) {
+        return coordinates;
       }
     }
 
     throw new BadRequestException(
-      'Cannot find destination coordinates for shop option listing',
+      'Cannot find destination coordinates for checkout shipping origin selection',
     );
   }
 
@@ -994,29 +1144,8 @@ export class ShipmentService {
     return (value * Math.PI) / 180;
   }
 
-  private formatShopOptionSelection(selection: ShopOptionSelection) {
-    return {
-      shopLocation: {
-        id: selection.shopLocation.id,
-        shopName: selection.shopLocation.shopName,
-        shopAddress: selection.shopLocation.shopAddress,
-        province: selection.shopLocation.province,
-        district: selection.shopLocation.district,
-        ward: selection.shopLocation.ward,
-        detailAddress: selection.shopLocation.detailAddress,
-        phoneNumber: selection.shopLocation.phoneNumber,
-        workingHours: selection.shopLocation.workingHours,
-        shopLatitude: selection.shopLocation.shopLatitude,
-        shopLongitude: selection.shopLocation.shopLongitude,
-        isActive: selection.shopLocation.isActive,
-      },
-      distanceKm: selection.distanceKm,
-      recommended: selection.recommended,
-    };
-  }
-
   private async getSenderAddress(shopLocationId?: string) {
-    const shopLocation = await this.getActiveShopLocation(shopLocationId);
+    const shopLocation = await this.getSenderShopLocation(shopLocationId);
 
     if (shopLocation) {
       return {
@@ -1040,23 +1169,25 @@ export class ShipmentService {
   }
 
   private async getSenderRateAddress(shopLocationId?: string) {
-    const shopLocation = await this.getActiveShopLocation(shopLocationId);
+    const shopLocation = await this.getSenderShopLocation(shopLocationId);
 
     if (shopLocation) {
       return {
         city: shopLocation.province,
         district: shopLocation.district,
+        ward: shopLocation.ward,
       };
     }
 
     return {
       city: this.getSenderCity(),
       district: this.getSenderDistrict(),
+      ward: this.getSenderWard(),
     };
   }
 
   private async getSenderAddressSummary(shopLocationId?: string) {
-    const shopLocation = await this.getActiveShopLocation(shopLocationId);
+    const shopLocation = await this.getSenderShopLocation(shopLocationId);
 
     if (shopLocation) {
       return {
@@ -1095,6 +1226,31 @@ export class ShipmentService {
     }
 
     return shopLocation;
+  }
+
+  private async getSenderShopLocation(
+    shopLocationId?: string,
+  ): Promise<ShopLocation | null> {
+    if (shopLocationId) {
+      return this.getActiveShopLocation(shopLocationId);
+    }
+
+    const activeShopLocations = await this.shopLocationRepository.find({
+      where: { isActive: true },
+      order: { updatedAt: 'DESC' },
+    });
+
+    if (activeShopLocations.length === 1) {
+      return activeShopLocations[0];
+    }
+
+    if (activeShopLocations.length > 1) {
+      throw new BadRequestException(
+        'Multiple active shop locations found. Please select shopLocationId before calculating shipping.',
+      );
+    }
+
+    return null;
   }
 
   private getSenderCity(): string {

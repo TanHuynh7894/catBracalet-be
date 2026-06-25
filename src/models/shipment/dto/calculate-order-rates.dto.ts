@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsUUID, Min } from 'class-validator';
+import { IsInt, IsOptional, Min } from 'class-validator';
 
 export class CalculateOrderRatesDto {
   @ApiProperty({
@@ -57,13 +57,4 @@ export class CalculateOrderRatesDto {
   @Min(0)
   @IsOptional()
   cod?: number;
-
-  @ApiProperty({
-    example: '24e630a0-0f21-4254-9abe-c684db699ceb',
-    description: 'Optional active shop location id selected as shipping origin',
-    required: false,
-  })
-  @IsUUID()
-  @IsOptional()
-  shopLocationId?: string;
 }

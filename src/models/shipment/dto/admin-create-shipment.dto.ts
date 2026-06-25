@@ -18,15 +18,6 @@ export class AdminCreateShipmentDto {
   orderId: string;
 
   @ApiProperty({
-    example: '24e630a0-0f21-4254-9abe-c684db699ceb',
-    description: 'Optional active shop location id selected as shipping origin',
-    required: false,
-  })
-  @IsUUID()
-  @IsOptional()
-  shopLocationId?: string;
-
-  @ApiProperty({
     example: 'OF8xXzc0OQ==',
     description: 'Rate id selected from Goship /rates response',
   })

@@ -4,19 +4,26 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import axios from 'axios';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateShopLocationDto } from './dto/create-shop-location.dto';
+import { UpdateShopInventoryDto } from './dto/update-shop-inventory.dto';
 import { UpdateShopLocationDto } from './dto/update-shop-location.dto';
+import { ShopInventory } from './entities/shop-inventory.entity';
 import { ShopLocation } from './entities/shop-location.entity';
 import { ShipmentService } from '../shipment/shipment.service';
+import { ProductVariant } from '../product-variants/entities/product-variant.entity';
+import { geocodeWithNominatim } from '../../helpers/nominatim-geocoding.helper';
 
 @Injectable()
 export class ShopLocationService {
   constructor(
     @InjectRepository(ShopLocation)
     private readonly shopLocationRepository: Repository<ShopLocation>,
+    @InjectRepository(ShopInventory)
+    private readonly shopInventoryRepository: Repository<ShopInventory>,
+    @InjectRepository(ProductVariant)
+    private readonly productVariantRepository: Repository<ProductVariant>,
     private readonly shipmentService: ShipmentService,
   ) {}
 
@@ -136,6 +143,49 @@ export class ShopLocationService {
     return this.shopLocationRepository.save(location);
   }
 
+  async getInventory(shopLocationId: string): Promise<ShopInventory[]> {
+    await this.findOne(shopLocationId);
+
+    return this.shopInventoryRepository.find({
+      where: { shopLocationId },
+      relations: ['variant'],
+      order: { variantId: 'ASC' },
+    });
+  }
+
+  async setInventory(
+    shopLocationId: string,
+    variantId: string,
+    dto: UpdateShopInventoryDto,
+  ): Promise<ShopInventory> {
+    await this.findOne(shopLocationId);
+
+    const variant = await this.productVariantRepository.findOneBy({
+      id: variantId,
+    });
+    if (!variant) {
+      throw new NotFoundException(
+        `Product variant with id ${variantId} not found`,
+      );
+    }
+
+    let inventory = await this.shopInventoryRepository.findOne({
+      where: { shopLocationId, variantId },
+    });
+
+    if (!inventory) {
+      inventory = this.shopInventoryRepository.create({
+        shopLocationId,
+        variantId,
+        stockQuantity: dto.stockQuantity,
+      });
+    } else {
+      inventory.stockQuantity = dto.stockQuantity;
+    }
+
+    return this.shopInventoryRepository.save(inventory);
+  }
+
   private async resolveShopAddress(
     dto: Pick<
       CreateShopLocationDto,
@@ -185,32 +235,19 @@ export class ShopLocationService {
   private async geocodeAddress(shopAddresses: string[]) {
     try {
       for (const shopAddress of [...new Set(shopAddresses.filter(Boolean))]) {
-        const encodedAddress = encodeURIComponent(shopAddress);
-        const response = await axios.get(
-          `https://nominatim.openstreetmap.org/search?q=${encodedAddress}&format=json&limit=1`,
-          {
-            headers: {
-              'User-Agent': 'CatBraceletBE/1.0 (shop-location-geocoding)',
-              Referer: 'http://localhost:3000',
-            },
-          },
-        );
+        const coordinates = await geocodeWithNominatim(shopAddress, {
+          userAgent: 'CatBraceletBE/1.0 (shop-location-geocoding)',
+          referer: 'http://localhost:3000',
+          timeout: 5000,
+        });
 
-        if (!Array.isArray(response.data) || response.data.length === 0) {
-          continue;
-        }
-
-        const result = response.data[0];
-        const shopLatitude = Number(result.lat);
-        const shopLongitude = Number(result.lon);
-
-        if (!Number.isFinite(shopLatitude) || !Number.isFinite(shopLongitude)) {
+        if (!coordinates) {
           continue;
         }
 
         return {
-          shopLatitude,
-          shopLongitude,
+          shopLatitude: coordinates.latitude,
+          shopLongitude: coordinates.longitude,
         };
       }
 
