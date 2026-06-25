@@ -15,7 +15,7 @@ import { ShipmentModule } from '../shipment/shipment.module';
 import { VipModule } from '../VIP/vip.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { OrderItemsModule } from '../order-items/order-items.module';
-import { NotificationsModule } from '../../notifications/notifications.module';
+import { NotificationsModule } from '../notifications/notifications.module'; 
 
 @Module({
   imports: [

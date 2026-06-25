@@ -26,8 +26,8 @@ import {
   ORDER_STATUSES,
   OrderStatus,
 } from './constants/order-status.constants';
-import { NotificationsService } from '../../notifications/notifications.service';
-import { NotificationsGateway } from '../../notifications/notifications.gateway';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
 
 @Injectable()
 export class OrdersService {
@@ -160,7 +160,8 @@ export class OrdersService {
 
     try {
       const newNotif = await this.notificationsService.createNotification({
-        title: 'Đơn hàng mới! 📦',
+        userId: checkoutResult.order.userId,
+        title: 'Đơn hàng mới!',
         message: `Khách hàng vừa đặt đơn #${checkoutResult.order.id} (Chờ thanh toán)`,
         type: 'ORDER',
         relatedId: checkoutResult.order.id.toString(),
@@ -244,6 +245,33 @@ export class OrdersService {
 
       order.status = newStatus;
       const savedOrder = await manager.save(order);
+
+      try {
+        let title = '';
+        let message = '';
+        const shortOrderId = savedOrder.id.substring(0, 8);
+
+        if (newStatus === 'CONFIRMED') {
+          title = 'Đơn hàng đã được xác nhận';
+          message = `Cửa hàng đã xác nhận đơn hàng #${shortOrderId}... của bạn và đang chuẩn bị hàng.`;
+        } else if (newStatus === 'SHIPPING') {
+          title = 'Đơn hàng bắt đầu được giao';
+          message = `Đơn hàng #${shortOrderId}... đã được bàn giao cho đơn vị vận chuyển.`;
+        }
+
+        if (title && message) {
+          const notif = await this.notificationsService.createNotification({
+            userId: savedOrder.userId,
+            title,
+            message,
+            type: 'ORDER',
+            relatedId: savedOrder.id,
+          });
+          this.notificationsGateway.sendNotificationToAll(notif);
+        }
+      } catch (error) {
+        console.error(`[ERROR] Lỗi bắn thông báo chuyển trạng thái đơn hàng ${orderId}:`, error);
+      }
 
       if (newStatus === 'DELIVERED') {
         await this.vipService.syncUserVipProgress(order.userId, manager);
