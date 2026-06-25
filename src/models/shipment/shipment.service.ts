@@ -6,7 +6,7 @@ import {
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import axios, { isAxiosError } from 'axios';
+import { isAxiosError } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import { EntityManager, Repository } from 'typeorm';
 import * as fs from 'fs';
@@ -26,6 +26,7 @@ import { CalculateAddressFeeDto } from './dto/calculate-address-fee.dto';
 import { CalculateFeeDto } from './dto/calculate-fee.dto';
 import { CalculateOrderRatesDto } from './dto/calculate-order-rates.dto';
 import { GoshipWebhookDto } from './dto/goship-webhook.dto';
+import { geocodeWithNominatim } from '../../helpers/nominatim-geocoding.helper';
 
 export interface GoshipProvince {
   id: string;
@@ -288,14 +289,16 @@ export class ShipmentService {
     }
 
     const totalFees = adminRates.map((rate) => Number(rate.total_fee));
+    const lowestFee = Math.min(...totalFees);
     const averageFee =
       totalFees.reduce((sum, fee) => sum + fee, 0) / totalFees.length;
     const highestFee = Math.max(...totalFees);
-    const markupFee = highestFee * 0.1;
-    const customerShippingFee = Math.round(averageFee + markupFee);
+    const markupFee = lowestFee * 0.1;
+    const customerShippingFee = Math.round(lowestFee + markupFee);
 
     return {
       rate_count: adminRates.length,
+      lowest_shipping_fee: lowestFee,
       average_shipping_fee: Math.round(averageFee),
       highest_shipping_fee: highestFee,
       markup_fee: Math.round(markupFee),
@@ -511,6 +514,7 @@ export class ShipmentService {
         address_to: {
           city: dto.city,
           district: dto.district,
+          ward: dto.ward,
         },
         parcel: {
           cod: dto.cod ?? 0,
@@ -1101,27 +1105,14 @@ export class ShipmentService {
       .filter(Boolean);
 
     for (const candidate of [...new Set(candidates)]) {
-      const response = await axios.get(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(candidate)}&format=json&limit=1`,
-        {
-          headers: {
-            'User-Agent': 'CatBraceletBE/1.0 (shipment-checkout-origin)',
-            Referer: 'http://localhost:3000',
-          },
-          timeout: 5000,
-        },
-      );
+      const coordinates = await geocodeWithNominatim(candidate, {
+        userAgent: 'CatBraceletBE/1.0 (shipment-checkout-origin)',
+        referer: 'http://localhost:3000',
+        timeout: 5000,
+      });
 
-      if (!Array.isArray(response.data) || response.data.length === 0) {
-        continue;
-      }
-
-      const result = response.data[0];
-      const latitude = Number(result.lat);
-      const longitude = Number(result.lon);
-
-      if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
-        return { latitude, longitude };
+      if (coordinates) {
+        return coordinates;
       }
     }
 
@@ -1184,12 +1175,14 @@ export class ShipmentService {
       return {
         city: shopLocation.province,
         district: shopLocation.district,
+        ward: shopLocation.ward,
       };
     }
 
     return {
       city: this.getSenderCity(),
       district: this.getSenderDistrict(),
+      ward: this.getSenderWard(),
     };
   }
 

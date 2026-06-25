@@ -4,7 +4,6 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import axios from 'axios';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateShopLocationDto } from './dto/create-shop-location.dto';
@@ -14,6 +13,7 @@ import { ShopInventory } from './entities/shop-inventory.entity';
 import { ShopLocation } from './entities/shop-location.entity';
 import { ShipmentService } from '../shipment/shipment.service';
 import { ProductVariant } from '../product-variants/entities/product-variant.entity';
+import { geocodeWithNominatim } from '../../helpers/nominatim-geocoding.helper';
 
 @Injectable()
 export class ShopLocationService {
@@ -235,32 +235,19 @@ export class ShopLocationService {
   private async geocodeAddress(shopAddresses: string[]) {
     try {
       for (const shopAddress of [...new Set(shopAddresses.filter(Boolean))]) {
-        const encodedAddress = encodeURIComponent(shopAddress);
-        const response = await axios.get(
-          `https://nominatim.openstreetmap.org/search?q=${encodedAddress}&format=json&limit=1`,
-          {
-            headers: {
-              'User-Agent': 'CatBraceletBE/1.0 (shop-location-geocoding)',
-              Referer: 'http://localhost:3000',
-            },
-          },
-        );
+        const coordinates = await geocodeWithNominatim(shopAddress, {
+          userAgent: 'CatBraceletBE/1.0 (shop-location-geocoding)',
+          referer: 'http://localhost:3000',
+          timeout: 5000,
+        });
 
-        if (!Array.isArray(response.data) || response.data.length === 0) {
-          continue;
-        }
-
-        const result = response.data[0];
-        const shopLatitude = Number(result.lat);
-        const shopLongitude = Number(result.lon);
-
-        if (!Number.isFinite(shopLatitude) || !Number.isFinite(shopLongitude)) {
+        if (!coordinates) {
           continue;
         }
 
         return {
-          shopLatitude,
-          shopLongitude,
+          shopLatitude: coordinates.latitude,
+          shopLongitude: coordinates.longitude,
         };
       }
 
