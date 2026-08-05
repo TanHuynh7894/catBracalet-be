@@ -6,14 +6,13 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { User } from '../../user/entities/user.entity'; // <-- Nhớ check lại tên folder là 'user' hay 'users' nhé
+import { User } from '../../user/entities/user.entity'; 
 
 @Entity('notifications')
 export class Notification {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  // 1. Cột user_id (Đã mở nullable: true để chứa được thông báo Hệ thống)
   @Column({ type: 'uuid', name: 'user_id', nullable: true })
   userId: string;
 
@@ -32,14 +31,12 @@ export class Notification {
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;
 
-  // 2. Cột con út vừa được tái sinh: Khóa phụ trỏ đến ID của Order/Ticket...
   @Column({ type: 'uuid', name: 'related_id', nullable: true })
   relatedId: string;
 
-  // Ràng buộc Khóa ngoại với bảng User
   @ManyToOne(() => User, (user) => user.id, {
     onDelete: 'CASCADE',
-    nullable: true, // Thêm dòng này để TypeORM không cằn nhằn khi user_id = null
+    nullable: true,
   })
   @JoinColumn({ name: 'user_id' })
   user: User;

@@ -10,7 +10,7 @@ import {
   UseInterceptors,
   ParseUUIDPipe,
   BadRequestException,
-  Query, // 1. Import thêm Query
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -33,10 +33,6 @@ import {
 } from '../../helpers/upload-image.helper';
 import { FilterProductDto } from './dto/FilterProduct.dto';
 
-/**
- * Hàm helper dùng để xử lý dữ liệu materialIds truyền lên từ multipart/form-data.
- * Do Form-data biến Array thành String, hàm này giúp parse ngược lại thành Array chuẩn để không lỗi Validation.
- */
 function parseMultipartArray(value: any): string[] {
   if (!value) return [];
   if (typeof value === 'string') {
@@ -97,14 +93,12 @@ export class ProductsController {
     @Body() createProductDto: CreateProductDto,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    // Ép kiểu dữ liệu đề phòng Form-data gửi materialIds sai cấu trúc mảng
     if (createProductDto.materialIds) {
       createProductDto.materialIds = parseMultipartArray(
         createProductDto.materialIds,
       );
     }
 
-    // Nếu có file upload, biến đổi đường dẫn tuyệt đối thành tương đối để lưu vào DB
     if (file) {
       createProductDto.thumbnail = buildImagePublicUrl(file.path);
     }
@@ -119,7 +113,6 @@ export class ProductsController {
     return this.productsService.findAll();
   }
 
-  // 3. THÊM ENDPOINT LỌC SẢN PHẨM Ở ĐÂY (Đặt trước Get(':id'))
   @Get('filter')
   @ApiOperation({
     summary: 'Filter products by variants (color, stone type, size, price)',
@@ -186,14 +179,12 @@ export class ProductsController {
     @Body() updateProductDto: UpdateProductDto,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    // Ép kiểu dữ liệu đề phòng Form-data gửi materialIds sai cấu trúc mảng khi update
     if (updateProductDto.materialIds) {
       updateProductDto.materialIds = parseMultipartArray(
         updateProductDto.materialIds,
       );
     }
 
-    // Nếu người dùng chọn upload file ảnh mới khi cập nhật
     if (file) {
       updateProductDto.thumbnail = buildImagePublicUrl(file.path);
     }

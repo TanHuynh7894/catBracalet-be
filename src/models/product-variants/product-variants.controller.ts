@@ -33,7 +33,7 @@ export class ProductVariantsController {
 
   @Post()
   @ApiOperation({ summary: 'Create a product variant' })
-  @ApiBody({ type: CreateProductVariantDto }) // 🟢 ĐÃ CẬP NHẬT: Định nghĩa cấu trúc Body mẫu cho Swagger
+  @ApiBody({ type: CreateProductVariantDto }) 
   @ApiCreatedResponse({ type: ProductVariant })
   create(@Body() createProductVariantDto: CreateProductVariantDto) {
     return this.productVariantsService.create(createProductVariantDto);

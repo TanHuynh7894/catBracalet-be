@@ -46,16 +46,13 @@ export class CartService {
     return cart;
   }
 
-  // Helper: parse decimal values returned by TypeORM (may be string or number)
   private parseDecimal(value: string | number | undefined | null): number {
     if (value === undefined || value === null) return 0;
     if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
-    // typeof value === 'string'
     const n = parseFloat(value);
     return Number.isFinite(n) ? n : 0;
   }
 
-  // Round to 2 decimal places (money)
   private round2(value: number): number {
     return Math.round(value * 100) / 100;
   }
@@ -85,7 +82,6 @@ export class CartService {
     const formattedItems = items.map((item) => {
       totalItems += item.quantity;
 
-      // variant and product mapping are loaded via relations (may be undefined)
       const variant: ProductVariant | undefined = item.variant;
       const mappings: ProductVariantMapping[] | undefined =
         variant?.productVariantMappings;
@@ -101,9 +97,8 @@ export class CartService {
 
       totalPrice += subTotal;
 
-      // Return minimal variant/product details for frontend
       return {
-        cartItemId: item.id, // cart_items.cart_item_id - used for delete/update
+        cartItemId: item.id,
         variantId: item.variantId,
         quantity: item.quantity,
         unitPrice,
@@ -228,7 +223,6 @@ export class CartService {
     if (quantity <= 0)
       throw new BadRequestException('Quantity must be greater than 0');
 
-    // Find cart id for the user without loading relations; do not create a cart when updating
     const cart = await this.cartRepository.findOne({
       where: { userId },
       select: ['id'],
@@ -262,7 +256,6 @@ export class CartService {
     userId: string,
     cartItemId: string,
   ): Promise<{ success: boolean }> {
-    // Do not create cart when removing; ensure cart exists for user
     const cart = await this.cartRepository.findOne({
       where: { userId },
       select: ['id'],

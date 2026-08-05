@@ -240,7 +240,6 @@ export class PaymentsService {
 
       const receivedSignature = typeof signature === 'string' ? signature : '';
 
-      // ✅ timing-safe compare
       const isValid =
         calculatedSignature.length === receivedSignature.length &&
         timingSafeEqual(

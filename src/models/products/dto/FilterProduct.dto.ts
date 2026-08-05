@@ -8,7 +8,6 @@ export class FilterProductDto {
   @IsString()
   color?: string;
 
-  // THÊM MỚI: Màu đá
   @ApiPropertyOptional({ description: 'Màu đá' })
   @IsOptional()
   @IsString()

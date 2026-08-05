@@ -45,7 +45,6 @@ export class TicketsGateway
     console.log(`[SOCKET] Client ngắt kết nối: ${client.id}`);
   }
 
-  // Người dùng tham gia vào phòng chat
   @SubscribeMessage('joinTicket')
   async handleJoinTicket(
     @ConnectedSocket() client: Socket,
@@ -55,14 +54,12 @@ export class TicketsGateway
     client.join(data.ticket_id);
     console.log(`[SOCKET] Client ${client.id} đã vào phòng: ${data.ticket_id}`);
 
-    // Gửi lại lịch sử chat cho người vừa join
     const history = await this.ticketMessagesService.getMessagesByTicketId(
       data.ticket_id,
     );
     client.emit('chatHistory', history);
   }
 
-  // Người dùng gửi tin nhắn
   @SubscribeMessage('sendMessage')
   async handleSendMessage(
     @ConnectedSocket() client: Socket,
@@ -75,7 +72,6 @@ export class TicketsGateway
 
     const senderId = user.userId || user.id || user.sub;
 
-    // Lưu vào DB
     const savedMessage = await this.ticketMessagesService.saveMessage({
       ticket_id: data.ticket_id,
       sender_id: senderId,
@@ -84,7 +80,6 @@ export class TicketsGateway
       status: 'sent',
     });
 
-    // PHÁT TIN NHẮN CHO MỌI NGƯỜI TRONG PHÒNG (bao gồm cả người gửi)
     this.server.to(data.ticket_id).emit('newMessage', savedMessage);
     console.log(`[SOCKET] Đã phát tin nhắn tới room ${data.ticket_id}`);
   }

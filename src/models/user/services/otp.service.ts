@@ -1,8 +1,4 @@
-﻿/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-
-import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+﻿import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import * as nodemailer from 'nodemailer';
@@ -37,7 +33,7 @@ export class OtpService implements OnModuleInit {
     const host =
       this.configService.get<string>('MAIL_HOST') || 'smtp.gmail.com';
     const portRaw = this.configService.get<string>('MAIL_PORT');
-    const port = portRaw ? parseInt(portRaw, 10) : 587; // Mặc định là 587 nếu trống
+    const port = portRaw ? parseInt(portRaw, 10) : 587;
     const secureRaw = this.configService.get<string>('MAIL_SECURE');
     const secure =
       typeof secureRaw === 'string' ? secureRaw === 'true' : port === 465;
@@ -45,14 +41,12 @@ export class OtpService implements OnModuleInit {
     const user = this.configService.get<string>('MAIL_USER');
     const pass = this.configService.get<string>('MAIL_PASSWORD');
 
-    // CẤU HÌNH SỬA ĐỔI: Tối ưu hóa cho cả cổng 465 và 587 của Gmail
     this.transporter = nodemailer.createTransport({
       host,
       port,
-      secure, // Sẽ bằng false đối với cổng 587
+      secure,
       auth: user && pass ? { user, pass } : undefined,
       tls: {
-        // Ép buộc hoặc hỗ trợ STARTTLS không bị chặn bởi chứng chỉ self-signed local
         rejectUnauthorized: false,
       },
       logger: process.env.NODE_ENV !== 'production',
@@ -60,7 +54,6 @@ export class OtpService implements OnModuleInit {
     });
 
     try {
-      // Hàm verify này sẽ kết nối thử đến Google bằng tài khoản và mật khẩu ứng dụng của ông
       await this.transporter.verify();
       this.logger.log('=== [SUCCESS] Kết nối đến Server Gmail thành công! ===');
     } catch (err) {
@@ -101,7 +94,7 @@ export class OtpService implements OnModuleInit {
     });
 
     const otp = this.generateOtpCode();
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
     this.registerOtps.set(email, { otp, expiresAt });
 
     const mailFrom =

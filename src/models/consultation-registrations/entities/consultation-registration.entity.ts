@@ -6,7 +6,7 @@ import {
   JoinColumn,
   ManyToOne,
 } from 'typeorm';
-import { Product } from '../../products/entities/product.entity'; // Đường dẫn có thể thay đổi tùy cấu trúc của bạn
+import { Product } from '../../products/entities/product.entity'; 
 
 @Entity('consultation_registrations')
 export class ConsultationRegistration {
@@ -31,7 +31,6 @@ export class ConsultationRegistration {
   @Column({ type: 'uuid', name: 'product_id', nullable: true })
   productId: string;
 
-  // Thiết lập Relation với bảng Product (nếu bạn cần query join)
   @ManyToOne(() => Product)
   @JoinColumn({ name: 'product_id' })
   product: Product;

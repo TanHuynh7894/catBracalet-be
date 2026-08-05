@@ -1,6 +1,6 @@
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
-@Entity('shipments') // Khớp với tên bảng public.shipments trong ảnh
+@Entity('shipments') 
 export class Shipment {
   @PrimaryGeneratedColumn('uuid', { name: 'shipment_id' })
   id: string;
@@ -9,13 +9,13 @@ export class Shipment {
   orderId: string;
 
   @Column({ length: 255, name: 'shipping_partner' })
-  shippingPartner: string; // Trong ảnh ví dụ là 'GHN' hoặc 'GHTK' sau này
+  shippingPartner: string; 
 
   @Column({ length: 255, name: 'tracking_code', nullable: true })
-  trackingCode: string | null; // Trong ảnh ví dụ là 'GHN001'
+  trackingCode: string | null; 
 
   @Column({ length: 30, name: 'shipping_status', default: 'SHIPPING' })
-  shippingStatus: string; // Trong ảnh ví dụ là 'SHIPPING'
+  shippingStatus: string; 
 
   @Column({
     type: 'timestamp without time zone',

@@ -20,10 +20,9 @@ export class ConsultationRegistrationsService {
   }
 
   async findAll(): Promise<ConsultationRegistration[]> {
-    // Tui sort theo created_at giảm dần (DESC) để đơn mới nhất hiển thị lên đầu
     return await this.registrationRepository.find({
       order: { createdAt: 'DESC' },
-      relations: ['product'], // Kéo kèm luôn thông tin product nếu có
+      relations: ['product'],
     });
   }
 

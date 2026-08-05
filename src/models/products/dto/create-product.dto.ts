@@ -33,11 +33,9 @@ export class CreateProductDto {
     ],
     type: [String],
   })
-  // 🟢 QUAN TRỌNG: Đặt @Transform lên đầu tiên để nó chuyển chuỗi từ form-data thành Mảng TRƯỚC khi validate
   @Transform(({ value }) => {
     if (value === undefined || value === null || value === '') return undefined;
 
-    // Trường hợp gửi JSON string từ Postman hoặc Frontend: '["uuid-1", "uuid-2"]'
     if (
       typeof value === 'string' &&
       value.trim().startsWith('[') &&
@@ -50,12 +48,10 @@ export class CreateProductDto {
       }
     }
 
-    // Trường hợp gửi chuỗi cách nhau bằng dấu phẩy: "uuid-1,uuid-2"
     if (typeof value === 'string' && value.includes(',')) {
       return value.split(',').map((id) => id.trim());
     }
 
-    // Trường hợp chỉ gửi đúng 1 chuỗi UUID đơn lẻ từ form-data: "uuid-1"
     if (typeof value === 'string') {
       return [value.trim()];
     }
@@ -98,11 +94,10 @@ export class CreateProductDto {
 
   @ApiPropertyOptional({
     type: 'string',
-    format: 'binary', // Kích hoạt nút "Chọn tệp" trên UI Swagger
+    format: 'binary', 
     description: 'Ảnh đại diện của sản phẩm (Upload tệp ảnh)',
   })
   @IsOptional()
-  // Đã chuyển sang any để tránh bị IsString ngăn cản dữ liệu nhị phân (binary) từ Multer
   thumbnail?: any;
 
   @ApiProperty({

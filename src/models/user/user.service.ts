@@ -40,13 +40,9 @@ export class UserService {
     private readonly vipService: VipService,
   ) {}
 
-  /**
-   * Helper function: Clone object và sinh ra Full URL cho Avatar (Tránh lỗi nhân đôi Domain)
-   */
   private formatUserAvatarUrl(user: User): User {
     if (!user) return user;
 
-    // Tạo bản sao shallow copy để tránh chỉnh sửa trực tiếp trên reference gốc của TypeORM
     const userClone = { ...user };
 
     if (userClone.avatar) {
@@ -58,7 +54,6 @@ export class UserService {
         ? baseUrl.slice(0, -1)
         : baseUrl;
 
-      // Nếu ảnh đã có dạng http:// hoặc https:// thì bỏ qua không nối nữa
       if (
         !userClone.avatar.startsWith('http://') &&
         !userClone.avatar.startsWith('https://')
@@ -72,9 +67,6 @@ export class UserService {
     return userClone;
   }
 
-  /**
-   * Bước 1: Đăng ký người dùng - lưu tạm thời, gửi OTP
-   */
   async registerUser(
     registerUserDto: RegisterUserDto,
   ): Promise<{ message: string; email: string }> {
@@ -112,9 +104,6 @@ export class UserService {
     };
   }
 
-  /**
-   * Bước 2: Xác thực OTP và lưu User vào DB
-   */
   async verifyOtp(
     verifyOtpDto: VerifyOtpDto,
   ): Promise<{ message: string; user: Omit<User, 'password'> }> {
@@ -143,7 +132,6 @@ export class UserService {
 
     const formattedUser = this.formatUserAvatarUrl(savedUser);
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password: _, ...userWithoutPassword } = formattedUser;
 
     return {
@@ -152,9 +140,6 @@ export class UserService {
     };
   }
 
-  /**
-   * Bước 3: Đăng nhập - trả về cặp Access + Refresh Token
-   */
   async loginUser(loginUserDto: LoginUserDto): Promise<{
     message: string;
     user: Omit<User, 'password'>;
@@ -210,7 +195,6 @@ export class UserService {
         .where('user.id = :userId', { userId: user.id })
         .getOne();
 
-      // Định dạng URL ảnh một cách an toàn thông qua bản sao Clone
       const formattedUser = this.formatUserAvatarUrl(userWithRoles ?? user);
 
       const userResponse: Omit<User, 'password'> = {
@@ -241,9 +225,6 @@ export class UserService {
     }
   }
 
-  /**
-   * Bước 4: Refresh Token
-   */
   async refreshToken(
     refreshTokenDto: RefreshTokenDto,
   ): Promise<{ accessToken: string; refreshToken: string }> {
@@ -306,9 +287,6 @@ export class UserService {
     }
   }
 
-  /**
-   * Bước 5: Logout
-   */
   async logoutUser(
     logoutDto: LogoutDto,
     userId: string,
@@ -356,9 +334,6 @@ export class UserService {
     }
   }
 
-  /**
-   * Yêu cầu reset password
-   */
   async requestPasswordReset(
     requestResetDto: RequestPasswordResetDto,
   ): Promise<{ message: string; email: string }> {
@@ -377,9 +352,6 @@ export class UserService {
     };
   }
 
-  /**
-   * Reset password thành công
-   */
   async resetPassword(
     resetPasswordDto: ResetPasswordDto,
   ): Promise<{ message: string }> {
@@ -409,8 +381,6 @@ export class UserService {
     return { message: 'Reset password thành công. Vui lòng đăng nhập lại.' };
   }
 
-  // ========== CÁC HÀM CRUD & PROFILE ==========
-
   create(createUserDto: CreateUserDto) {
     const newUser = this.userRepository.create(createUserDto);
     return this.userRepository.save(newUser);
@@ -423,9 +393,6 @@ export class UserService {
     return users.map((user) => this.formatUserAvatarUrl(user));
   }
 
-  /**
-   * Hàm lấy chi tiết User duy nhất theo UUID
-   */
   async findOne(id: string): Promise<User> {
     await this.vipService.syncUserVipProgress(id);
 
@@ -446,7 +413,6 @@ export class UserService {
 
   async getProfile(id: string): Promise<Omit<User, 'password'>> {
     const user = await this.findOne(id);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...result } = user;
     return result;
   }
@@ -465,14 +431,10 @@ export class UserService {
     const updatedUser = await this.userRepository.save(user);
     const formattedUser = this.formatUserAvatarUrl(updatedUser);
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password: _, ...result } = formattedUser;
     return result;
   }
-
-  /**
-   * Cập nhật đường dẫn avatar từ Controller xử lý file
-   */
+  
   async updateAvatar(id: string, avatarPath: string): Promise<User> {
     const user = await this.userRepository.findOne({ where: { id } });
 

@@ -10,7 +10,7 @@ import {
 import { Category } from '../../categories/entities/category.entity';
 import { ProductImage } from '../../product-images/entities/product-image.entity';
 import { ProductVariantMapping } from '../../product-variant-mappings/entities/product-variant-mapping.entity';
-import { ProductMaterial } from '../../product-materials/entities/product-material.entity'; // Đã thêm import này
+import { ProductMaterial } from '../../product-materials/entities/product-material.entity';
 
 @Entity('products')
 @Check(`status IN ('ACTIVE', 'INACTIVE')`)

@@ -1,4 +1,3 @@
-// src/models/product-variants/product-variants.service.ts
 import {
   BadRequestException,
   Injectable,
@@ -46,7 +45,6 @@ export class ProductVariantsService {
       throw new NotFoundException(`Product with id ${productId} not found`);
     }
 
-    // Chạy Transaction bảo đảm an toàn dữ liệu cho cả 2 bảng
     const fullCreatedVariant = await this.dataSource.transaction(
       async (manager) => {
         const variantRepository = manager.getRepository(ProductVariant);
@@ -61,7 +59,6 @@ export class ProductVariantsService {
 
         const savedVariant = await variantRepository.save(newProductVariant);
 
-        // 🟢 ĐÃ FIX CHUẨN: Sử dụng variantId tương thích chính xác với Entity ProductVariantMapping của ông
         const newMapping = mappingRepository.create({
           productId,
           variantId: savedVariant.id,
@@ -70,7 +67,6 @@ export class ProductVariantsService {
 
         await mappingRepository.save(newMapping);
 
-        // Truy vấn nạp đầy đủ cấu trúc quan hệ dữ liệu ngay trong transaction
         return await variantRepository.findOne({
           where: { id: savedVariant.id },
           relations: {
@@ -94,7 +90,6 @@ export class ProductVariantsService {
       );
     }
 
-    // Đổ baseUrl vào đường dẫn ảnh tương đối và trả về cho Client
     return this.mapVariantImageUrls(fullCreatedVariant);
   }
 

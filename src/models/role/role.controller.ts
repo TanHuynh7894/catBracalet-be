@@ -22,7 +22,7 @@ import { Roles } from '../../auth/decorators/roles.decorator';
 @ApiTags('Role')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ADMIN') // Chỉ Admin mới được quản lý Role
+@Roles('ADMIN')
 @Controller('role')
 export class RoleController {
   constructor(private readonly roleService: RoleService) {}

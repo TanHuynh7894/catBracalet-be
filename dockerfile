@@ -24,7 +24,7 @@ RUN npm install --production --silent
 
 # Copy built output from builder
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/images ./images
+# COPY --from=builder /app/images ./images
 COPY --from=builder /app/start.js ./start.js
 
 EXPOSE 4000

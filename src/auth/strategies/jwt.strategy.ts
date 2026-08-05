@@ -9,7 +9,7 @@ import { User } from '../../models/user/entities/user.entity';
 interface JwtPayload {
   id?: string;
   sub?: string;
-  userId?: string; // 💡 THÊM KEY NÀY: Khớp với logic sinh token khi Login của ông
+  userId?: string;
   email: string;
   iat?: number;
   exp?: number;
@@ -28,9 +28,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  // Khai báo kiểu trả về tường minh Promise<User> thay vì để tự suy diễn
   async validate(payload: JwtPayload): Promise<User> {
-    // Luôn lấy được ID cho dù lúc tạo token ông truyền key là sub, id, hay userId
     const userId = payload.userId || payload.sub || payload.id;
 
     console.log('[JWT.STRATEGY] Validating token payload:', {

@@ -172,7 +172,6 @@ export class OrdersService {
         `[DEBUG] Đã bắn thông báo cho đơn hàng ${checkoutResult.order.id}`,
       );
     } catch (error) {
-      // Bọc try-catch cẩn thận, lỡ thông báo lỗi thì khách vẫn nhận được link thanh toán
       console.error('[ERROR] Lỗi nổ thông báo checkout:', error);
     }
 

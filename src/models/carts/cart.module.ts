@@ -9,7 +9,6 @@ import { ProductVariantMapping } from '../product-variant-mappings/entities/prod
 
 @Module({
   imports: [
-    // 💡 Bắt buộc phải nạp đầy đủ các Entity mà CartService đang Inject vào Repository
     TypeOrmModule.forFeature([
       Cart,
       CartItem,
@@ -19,6 +18,6 @@ import { ProductVariantMapping } from '../product-variant-mappings/entities/prod
   ],
   controllers: [CartController],
   providers: [CartService],
-  exports: [CartService], // Export nếu cần dùng ở các module khác (ví dụ: OrdersModule)
+  exports: [CartService],
 })
 export class CartModule {}

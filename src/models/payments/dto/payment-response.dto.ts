@@ -62,7 +62,6 @@ export class PaymentStatusResponseDto {
   @ApiProperty({ nullable: true, example: 'FTX123456' })
   transactionCode: string | null;
 
-  // 🌟 THÊM 2 THUỘC TÍNH NÀY để hứng data thực tế trả về từ PayOS SDK mà bạn đang map ở Service
   @ApiProperty({ example: 0, description: 'Số tiền khách đã thanh toán' })
   amountPaid: number;
 

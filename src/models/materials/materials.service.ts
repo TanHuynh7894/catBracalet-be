@@ -65,7 +65,6 @@ export class MaterialsService {
   ): Promise<Material> {
     const material = await this.findOne(id);
 
-    // Không cho update status
     if ('status' in updateMaterialDto) {
       throw new BadRequestException('Status cannot be updated in this API');
     }
@@ -83,11 +82,9 @@ export class MaterialsService {
   //   return await this.materialRepository.save(material);
   // }
 
-  // Toggle status (Thay thế cho softDelete cũ)
   async softDelete(id: string): Promise<Material> {
     const material = await this.findOne(id);
 
-    // Nếu đang ACTIVE thì chuyển thành INACTIVE, ngược lại thì thành ACTIVE
     material.status =
       material.status === MaterialStatus.ACTIVE
         ? MaterialStatus.INACTIVE

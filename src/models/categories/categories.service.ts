@@ -81,11 +81,9 @@ export class CategoriesService {
     await this.categoryRepository.remove(category);
   }
 
-  // Toggle status (Thay thế cho softDelete cũ)
   async softDelete(id: string): Promise<Category> {
     const category = await this.findOne(id);
 
-    // Nếu đang ACTIVE thì chuyển thành INACTIVE, ngược lại thì thành ACTIVE
     category.status =
       category.status === CategoryStatus.ACTIVE
         ? CategoryStatus.INACTIVE

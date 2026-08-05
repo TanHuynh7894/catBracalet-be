@@ -28,7 +28,6 @@ export class NotificationsService {
 
       const savedNotif = await this.notificationRepo.save(entity);
 
-      // Bắn object xịn vừa lưu DB qua Socket cho Frontend
       this.gateway.sendNotificationToAll(savedNotif);
 
       return savedNotif;
@@ -38,7 +37,6 @@ export class NotificationsService {
         `[CRITICAL] Ghi DB Notification thất bại: ${error.message}`,
       );
 
-      // Phao cứu sinh: DB lỗi vẫn bắn data qua socket để UI không bị đơ
       const fallbackObj = {
         id: Date.now().toString(),
         userId: data.userId || null,

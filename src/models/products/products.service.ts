@@ -22,17 +22,11 @@ export class ProductsService {
 
     @InjectRepository(ProductMaterial)
     private readonly productMaterialRepository: Repository<ProductMaterial>,
-
-    // Inject ConfigService để lấy giá trị biến môi trường (.env)
     private readonly configService: ConfigService,
   ) {}
 
-  /**
-   * Helper function xuất ra: URL_BASE_BE + THUMBNAIL GỐC
-   */
   private formatProductImageUrl(product: Product): Product {
     if (product && product.thumbnail) {
-      // Đọc trực tiếp từ configService mỗi khi hàm chạy để đảm bảo không bị cache chuỗi rỗng
       const baseUrl =
         this.configService.get<string>('url_base_BE') ||
         'http://localhost:3000';
@@ -41,7 +35,6 @@ export class ProductsService {
       console.log('KEY URL_BASE_BE ĐỌC ĐƯỢC:', baseUrl);
       console.log('THUMBNAIL GỐC TRONG DB:', product.thumbnail);
 
-      // Làm sạch các dấu gạch chéo dư thừa trước khi nối chuỗi
       const cleanBaseUrl = baseUrl.endsWith('/')
         ? baseUrl.slice(0, -1)
         : baseUrl;
@@ -49,7 +42,6 @@ export class ProductsService {
         ? product.thumbnail
         : `/${product.thumbnail}`;
 
-      // Gán đè kết quả nối chuỗi trực tiếp
       product.thumbnail = `${cleanBaseUrl}${cleanThumbnail}`;
 
       console.log('KẾT QUẢ SAU KHI NỐI URL:', product.thumbnail);
@@ -178,7 +170,6 @@ export class ProductsService {
       throw new NotFoundException(`Product with id ${id} not found`);
     }
 
-    // Toggle trạng thái giữa ACTIVE và INACTIVE
     product.status =
       product.status === ProductStatus.INACTIVE
         ? ProductStatus.ACTIVE
@@ -200,7 +191,6 @@ export class ProductsService {
   }
 
   async filterProducts(filterDto: FilterProductDto): Promise<Product[]> {
-    // Thêm stoneColor vào lúc destructuring
     const { color, stoneColor, stoneType, size, minPrice, maxPrice } =
       filterDto;
 

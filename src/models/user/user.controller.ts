@@ -42,7 +42,6 @@ import { LogoutDto } from './dto/logout.dto';
 import { AddUserRoleDto } from './dto/add-user-role.dto';
 import { RemoveUserRoleDto } from './dto/remove-user-role.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
-// (Bạn có thể bỏ file upload-avatar.dto.ts nếu không còn dùng tới fields nào khác ngoài file ảnh)
 import { UploadAvatarDto } from './dto/upload-avatar.dto';
 
 import {
@@ -132,9 +131,6 @@ export class UserController {
     return this.userService.resetPassword(resetPasswordDto);
   }
 
-  /**
-   * 🟢 API UPLOAD AVATAR CHO USER
-   */
   @Patch(':id/avatar')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
@@ -151,7 +147,6 @@ export class UserController {
     description: 'Avatar updated successfully',
     type: User,
   })
-  // 💡 Gắn cứng UploadImageType.AVATAR vào ngay đây
   @UseInterceptors(
     FileInterceptor('avatar', getImageUploadOptions(UploadImageType.AVATAR)),
   )
@@ -163,8 +158,6 @@ export class UserController {
       throw new BadRequestException('Vui lòng cung cấp file ảnh');
     }
 
-    // file.path từ Multer sẽ có định dạng thô dạng "uploads/avatar/abc.jpg"
-    // Hàm buildImagePublicUrl sẽ chuyển đổi nó thành dạng chuẩn lưu trữ "/images/avatar/abc.jpg"
     const avatarPath = buildImagePublicUrl(file.path);
 
     return this.userService.updateAvatar(id, avatarPath);

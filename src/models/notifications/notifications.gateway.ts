@@ -21,9 +21,7 @@ export class NotificationsGateway
     console.log(`Nhân viên đã ngắt kết nối: ${client.id}`);
   }
 
-  // SỬA TÊN HÀM VÀ THAM SỐ Ở ĐÂY
   sendNotificationToAll(notification: any) {
-    // Bắn chung sự kiện 'new_notification'
     this.server.emit('new_notification', notification);
   }
 }

@@ -19,8 +19,6 @@ export class RoleService {
 
   async findAll(): Promise<Role[]> {
     const roles = await this.roleRepository.find();
-    // console.log(`✅ Successfully fetched ${roles.length} roles from Database.`);
-    // console.log('📦 Data Payload:', JSON.stringify(roles, null, 2));
     return roles;
   }
 

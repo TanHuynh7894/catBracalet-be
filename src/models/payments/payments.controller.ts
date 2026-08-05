@@ -28,7 +28,7 @@ import { PayOSWebhookDto } from './dto/payos-webhook.dto';
 import { PaymentsService } from './payments.service';
 
 @ApiTags('Payments')
-@ApiBearerAuth('JWT-auth') // 🌟 THÊM DÒNG NÀY: Kích hoạt ổ khóa bảo mật cho toàn bộ Route trong Controller này
+@ApiBearerAuth('JWT-auth') 
 @Controller('api/payment')
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
@@ -49,7 +49,7 @@ export class PaymentsController {
     return this.paymentsService.retryPayment(body.orderId);
   }
 
-  @Public() // 💡 Route này là Webhook từ cổng PayOS gọi về nên ông đã để Public, không lo bị chặn bởi khóa
+  @Public() 
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

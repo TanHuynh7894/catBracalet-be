@@ -3,8 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TicketMessageEntity } from './entities/ticket-message.entity';
 import { CreateTicketMessageDto } from './dto/create-ticket-message.dto';
-
-// Import Service và Gateway từ module Notifications
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 

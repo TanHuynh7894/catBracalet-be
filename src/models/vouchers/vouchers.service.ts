@@ -22,9 +22,6 @@ export class VouchersService {
     private readonly vouchersRepository: Repository<Vouchers>,
   ) {}
 
-  /**
-   * 1. Validate Voucher (Trạng thái, số lượng, ngày hạn)
-   */
   async validateVoucher(code: string, manager?: EntityManager) {
     const repo = manager
       ? manager.getRepository(Vouchers)
@@ -51,9 +48,6 @@ export class VouchersService {
     return voucher;
   }
 
-  /**
-   * 2. Tính toán số tiền được giảm
-   */
   calculateVoucherDiscount(subtotal: number, voucher: Vouchers): number {
     let discount = 0;
     if (voucher.discountType === 'PERCENT') {
@@ -62,25 +56,16 @@ export class VouchersService {
       discount = Number(voucher.discountValue);
     }
 
-    // Đảm bảo discount không âm và không vượt quá subtotal
     return Math.min(subtotal, Math.max(0, discount));
   }
 
-  /**
-   * 3. Giảm số lượng voucher sau khi checkout
-   */
   async decrementVoucherQuantity(id: string, manager: EntityManager) {
     await manager.decrement(Vouchers, { id }, 'quantity', 1);
   }
 
-  /**
-   * 4. Hoàn lại số lượng voucher khi hủy đơn
-   */
   async rollbackVoucher(id: string, manager: EntityManager) {
     await manager.increment(Vouchers, { id }, 'quantity', 1);
   }
-
-  // --- CRUD & Queries ---
 
   create(createVouchersDto: CreateVouchersDto) {
     const newVoucher = this.vouchersRepository.create(createVouchersDto);
@@ -113,7 +98,6 @@ export class VouchersService {
     return this.vouchersRepository.save(voucher);
   }
 
-  // --- Filters ---
 
   filterByStatus(status: string) {
     return this.vouchersRepository.find({ where: { status } });
